@@ -19,9 +19,10 @@ Type "cd ~/Documents/projects/personal/maestro"
 Enter
 Type "clear"
 Enter
-Show
-Sleep 400ms
-
+# Start the agent and absorb the tsx warm-up while hidden, so the recording opens directly on
+# the agent's first output instead of a blank prompt.
 Type "npx tsx demo/agent-run.ts"
 Enter
-Sleep 15s
+Sleep 2.4s
+Show
+Sleep 13s
