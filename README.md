@@ -30,6 +30,8 @@ else is structure that keeps a long autonomous run correct.
 | **Tool registry** | `src/tools/registry.ts` | 60 tools across 8 namespaces are self-describing `Tool<I,O>` values in a `Map`. Anthropic JSON schemas are generated from zod. Dispatch is one validated code path, so there is no `switch (toolName)` to grow. |
 | **Subagent orchestration** | `src/subagent/spawn.ts` | `agent.spawn` runs the same loop with an isolated context, a registry subset scoped to the granted tools, its own budget and trace span, and a schema-validated return. The parent sees only that return, never the child's transcript. |
 | **Long-horizon execution** | `src/agent/ledger.ts`, `src/agent/context.ts` | A durable plan ledger holds the plan, established facts, and file digests. It is re-rendered into the system prompt on every call, so it outlives the compaction that summarizes stale tool output away. Plan coherence lives in code, not in a prompt instruction. |
+| **Acceptance gate** | `src/agent/gate.ts` | Completion is a fact the runtime checks, not a claim the model makes. Before a run finishes, the loop runs the checks itself — tests pass, build passes, the tree is committed, the plan is closed — and refuses "done" until green, feeding failures back. |
+| **Crash-resume** | `src/agent/mission-log.ts` | An append-only mission log checkpoints the ledger snapshot + message window every step. `maestro resume <id>` rebuilds a killed run in a fresh process from the last checkpoint and finishes it. |
 | **Composable I/O** | `src/tools/schemas.ts` | `shell.run_tests` emits a `TestRunResult`. `code.localize_failure` declares that same schema as its input and ranks candidate files. `fs.read_many` then reads them. The chain type-checks. |
 | **Production scaffolding** | `src/obs/`, `src/resilience/` | pino structured logs, a JSONL span tracer, exponential backoff with jitter, a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness, and a unit + integration test suite. |
 
@@ -68,18 +70,24 @@ CLI (commander) -> runTask (composition root)
 npm install
 cp .env.example .env        # set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) for live runs
 
-npm run test                # 51 unit + integration tests
-npm run eval                # 4 deterministic eval tasks across 3 fixtures (no API key)
+npm run test                # 59 unit + integration tests
+npm run eval                # 5 deterministic eval scenarios across 3 fixtures (no API key)
 npm run eval -- --real      # same tasks against the live model
 npm run build && node dist/index.js run "fix the failing tests" --repo ./path
+node dist/index.js resume <missionId> --repo ./path                            # resume a crashed run
 node dist/index.js run "audit this repo" --repo ./path --permission readonly   # observe-only run
 ```
 
-The eval suite is built to be hard to fake. One task requires a session of more than 20 tool
-calls with mandatory subagent delegation and the run_tests-to-localize composition. A second
-task runs the same goal under a tiny context budget that forces compaction partway through, then
-asserts the plan survived and the tests are green. Both run with no network through the
-deterministic solver, so CI exercises the whole machine on every push.
+What the eval proves — and what it does not. The suite drives the **real** loop, registry,
+subagent, acceptance gate, and mission log through a **deterministic mock provider**, so CI
+verifies the runtime **invariants** on every push with no network: a 20+ call session with required
+subagent delegation and the run_tests→localize composition; the same task under a tiny context
+budget that forces compaction and asserts the plan survives; a cross-file bug and a multi-bug repo;
+and a crash-and-resume scenario that aborts mid-task, then resumes from the mission log in a fresh
+context and finishes green. It is strong proof of the machinery. It is **not** proof of live-model
+autonomy — that is what `--real` is for (see [Authentication](#authentication); the live path is
+wire-verified but a full run needs a non-throttled key). See [`docs/XARC.md`](docs/XARC.md) for the
+honest map of what's deep, what's deliberately small, and how it was built.
 
 ## Authentication
 

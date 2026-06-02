@@ -23,16 +23,24 @@ Each of the five required properties does real work:
    compaction.
 4. **Production scaffolding.** pino logs, a JSONL span tracer, exponential backoff with jitter,
    a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness,
-   a per-run project index that walks the tree once instead of once per `code.*` call, and 51 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
+   a per-run project index that walks the tree once instead of once per `code.*` call, and 59 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
 5. **Composable I/O.** `shell.run_tests` and `code.localize_failure` share one `TestRunResult`
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.
 
+Two capabilities sit on top of the five required properties because they are what a crash-resumable
+agent runtime actually needs. An **acceptance gate** (`src/agent/gate.ts`) makes completion a fact
+the runtime checks — tests pass, build passes, tree committed, plan closed — not a claim the model
+makes; a red gate is fed back and the run continues. A **durable mission log**
+(`src/agent/mission-log.ts`) checkpoints the ledger and message window every step, so `maestro
+resume <id>` rebuilds a killed run in a fresh process and finishes it.
+
 The eval harness materializes a fixture repo with seeded bugs into a temporary git repo, runs
 the agent, then runs the fixture's own suite to confirm the bugs are fixed. That is a
-SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvider`. Four tasks
-span three fixtures (a flagship multi-bug repo, a cross-file import bug, and a pagination repo),
-so the harness is shown to generalize rather than fit one scenario.
+SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvider`. Five scenarios
+span three fixtures (a flagship multi-bug repo, a cross-file import bug, a pagination repo) plus a
+crash-and-resume scenario — abort mid-task, resume from the mission log, finish green — so the
+harness shows the runtime invariants generalize rather than fit one happy path.
 
 ## What I cut
 
@@ -42,8 +50,9 @@ so the harness is shown to generalize rather than fit one scenario.
   failures moved from 400 to 429). A complete autonomous run was blocked by the subscription's
   burst rate limit, which a pay-per-token key removes. I did not build a multi-repo benchmark or
   statistical scoring across many tasks.
-- **Persistence and resumability.** A run is in-memory. Traces are written, but an interrupted
-  session cannot be checkpointed and resumed.
+- **Automatic crash recovery.** Resume exists and is proven (`maestro resume`, plus a resume eval),
+  but it is operator-initiated. There is no supervisor that detects a stuck run and restarts it from
+  the last checkpoint — that is the next step.
 - **Richer code intelligence.** `code.*` uses regex and heuristics rather than a real AST or
   LSP. That is enough for localization and outlines. An AST index would localize more precisely.
 - **Parallel subagents.** Spawning is sequential. The trace model and isolation already support
