@@ -118,6 +118,65 @@ export async function runEval(task: EvalTask, opts: RunEvalOptions): Promise<Eva
   };
 }
 
+export interface ResumeReport {
+  taskId: string;
+  passed: boolean;
+  abortStatus: string;
+  testsAfterAbort: "RED" | "GREEN";
+  resumeStatus: string;
+  resumeSteps: number;
+  gatePassed: boolean;
+  restartedFromScratch: boolean;
+  testsAfterResume: "RED" | "GREEN";
+  checkResults: Array<{ name: string; passed: boolean; description: string }>;
+}
+
+/**
+ * The crash-resume scenario: run the agent, kill it mid-task (a hard step-budget cut, standing in
+ * for a crash), confirm the work is NOT done, then RESUME from the durable mission log in a fresh
+ * provider + fresh context, and finish green. This proves the mission log is authoritative
+ * recovery state, not just a trace — the property a crash-resumable runtime lives or dies on.
+ */
+export async function runResumeScenario(opts: { providerFactory: () => import("../llm/provider.js").ModelProvider; config?: Config }): Promise<ResumeReport> {
+  const config = opts.config ?? loadConfig({ provider: "mock" });
+  const workspace = await materialize("buggy-stats");
+  const logger = silentLogger();
+  const goal = "the test suite is failing. fix the source so every test passes, and commit.";
+
+  // Phase 1: run, then cut it off mid-task before the fix lands.
+  const r1 = await runTask({ goal, workspace, config, provider: opts.providerFactory(), logger, budgets: { maxSteps: 14, maxTokens: 1e9 } });
+  const afterAbort = await runCommand("npm", ["test", "--silent"], { cwd: workspace, timeoutMs: 60_000 });
+  const testsAfterAbort = afterAbort.exitCode === 0 ? "GREEN" : "RED";
+
+  // Phase 2: resume from the mission log with a brand-new provider and context.
+  const r2 = await runTask({ goal: "(ignored on resume)", workspace, config, resumeMissionId: r1.missionId, provider: opts.providerFactory(), logger, budgets: { maxSteps: 40, maxTokens: 1e9 } });
+  const afterResume = await runCommand("npm", ["test", "--silent"], { cwd: workspace, timeoutMs: 60_000 });
+  const testsAfterResume = afterResume.exitCode === 0 ? "GREEN" : "RED";
+  const restartedFromScratch = r2.toolCalls[0]?.name === "plan.set";
+
+  const checkResults = [
+    { name: "aborted_mid_task", passed: r1.status === "max_steps", description: "the first run was cut off before completion" },
+    { name: "incomplete_after_abort", passed: testsAfterAbort === "RED", description: "the task was genuinely unfinished at the crash point" },
+    { name: "resumed_not_restarted", passed: !restartedFromScratch, description: "resume continued from the checkpoint (did not re-plan from scratch)" },
+    { name: "finished_green", passed: testsAfterResume === "GREEN", description: "the resumed run drove the suite to green" },
+    { name: "gate_passed", passed: r2.gate?.passed === true, description: "the acceptance gate confirmed the resumed work" },
+  ];
+
+  await fs.rm(workspace, { recursive: true, force: true }).catch(() => {});
+  return {
+    taskId: "buggy-stats:crash-and-resume",
+    passed: checkResults.every((c) => c.passed),
+    abortStatus: r1.status,
+    testsAfterAbort,
+    resumeStatus: r2.status,
+    resumeSteps: r2.steps,
+    gatePassed: r2.gate?.passed === true,
+    restartedFromScratch,
+    testsAfterResume,
+    checkResults,
+  };
+}
+
 // --- reusable checks --------------------------------------------------------
 
 export const checks = {

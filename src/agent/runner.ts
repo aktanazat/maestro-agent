@@ -9,6 +9,9 @@ import type { ToolServices } from "../tools/types.js";
 import { ConversationContext } from "./context.js";
 import { Ledger } from "./ledger.js";
 import { runAgent, type AgentRunResult, type Budgets } from "./loop.js";
+import { sweAcceptanceGate, type AcceptanceGate } from "./gate.js";
+import { MissionLog } from "./mission-log.js";
+import { ConfigError } from "../resilience/errors.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { makeSpawner } from "../subagent/spawn.js";
 import { ProjectIndex } from "../tools/project-index.js";
@@ -33,11 +36,18 @@ export interface TaskOptions {
   onToolResult?: import("../tools/types.js").ToolServices["onToolResult"];
   /** Observe each context compaction — used by the live activity view. */
   onCompact?: import("./context.js").ContextOptions["onCompact"];
+  /** Acceptance gate. Defaults to the SWE gate; pass null to disable (e.g. non-repo tasks). */
+  gate?: AcceptanceGate | null;
+  /** Resume a crashed run from its mission log instead of starting fresh. */
+  resumeMissionId?: string;
+  /** Pass null to disable the durable mission log (e.g. ephemeral tests). */
+  missionLog?: null;
 }
 
 export interface TaskResult extends AgentRunResult {
   ledger: ReturnType<Ledger["snapshot"]>;
   traceId: string;
+  missionId: string;
   contextStats: ReturnType<ConversationContext["stats"]>;
 }
 
@@ -57,8 +67,20 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
   const provider = opts.provider ?? makeProvider(opts.config, logger);
   const registry = opts.registry ?? buildRegistry();
 
-  const ledger = new Ledger(opts.goal);
-  if (opts.seedPlan) ledger.setPlan(opts.seedPlan);
+  // Mission log: durable, append-only, the record a run resumes from after a crash.
+  const missionsDir = join(workspace, ".maestro", "missions");
+  const resuming = Boolean(opts.resumeMissionId);
+  const missionId = opts.resumeMissionId ?? `mission-${Date.now().toString(36)}`;
+  const missionLog =
+    opts.missionLog === null ? undefined : new MissionLog({ missionId, dir: missionsDir, now: () => Date.now() });
+  const checkpoint = resuming ? MissionLog.lastCheckpoint(MissionLog.resolvePath(missionsDir, missionId)) : null;
+  if (resuming && !checkpoint) throw new ConfigError(`no resumable checkpoint for mission "${missionId}"`);
+
+  const goal = checkpoint ? (MissionLog.goalOf(MissionLog.resolvePath(missionsDir, missionId)) ?? opts.goal) : opts.goal;
+
+  // Fresh run → a new ledger; resume → rebuild the ledger from the last checkpoint.
+  const ledger = checkpoint ? Ledger.fromSnapshot(checkpoint.ledger) : new Ledger(goal);
+  if (!checkpoint && opts.seedPlan) ledger.setPlan(opts.seedPlan);
 
   const context = new ConversationContext({
     system: SYSTEM_PROMPT,
@@ -70,7 +92,14 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     logger,
     onCompact: opts.onCompact,
   });
-  context.pushUser([{ type: "text", text: `Goal:\n${opts.goal}` }]);
+  if (checkpoint) {
+    // Resume: restore the conversation window from the checkpoint; do NOT re-seed the goal.
+    context.restore(checkpoint.messages, checkpoint.compactions);
+    logger.info({ missionId, fromStep: checkpoint.step }, "resuming mission from checkpoint");
+  } else {
+    context.pushUser([{ type: "text", text: `Goal:\n${goal}` }]);
+    missionLog?.append({ kind: "start", missionId, goal });
+  }
 
   const limiterRegistry = new RateLimiterRegistry({
     anthropic: { ratePerSec: opts.config.rateLimits.anthropicPerSec, burst: 8 },
@@ -112,12 +141,14 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     tracer,
     signal: opts.signal,
     isDone: (c) => c.ledger.planComplete(),
+    gate: opts.gate === null ? undefined : (opts.gate ?? sweAcceptanceGate),
+    missionLog,
     onStep: opts.onStep,
   });
 
   logger.info({ status: result.status, steps: result.steps, tokensUsed: result.tokensUsed, compactions: result.compactions }, "task finished");
 
-  return { ...result, ledger: ledger.snapshot(), traceId: tracer.traceId, contextStats: context.stats() };
+  return { ...result, ledger: ledger.snapshot(), traceId: tracer.traceId, missionId, contextStats: context.stats() };
 }
 
 /**

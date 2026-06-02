@@ -1,5 +1,7 @@
-import { runEval, type EvalReport } from "./harness.js";
+import { runEval, runResumeScenario, type EvalReport } from "./harness.js";
 import { TASKS, SOLVERS } from "./tasks.js";
+import { buggyStatsSolver } from "./solver.js";
+import { MockProvider } from "../llm/mock.js";
 import { loadConfig } from "../config.js";
 import { AnthropicProvider } from "../llm/anthropic.js";
 import { createLogger } from "../obs/logger.js";
@@ -32,9 +34,22 @@ export async function main(argv: string[]): Promise<void> {
     printReport(report);
   }
 
+  // The crash-resume scenario (deterministic only): abort mid-task, resume from the mission log.
+  let resumeOk = true;
+  if (!real) {
+    process.stdout.write(`\n▶ buggy-stats:crash-and-resume (mock solver)\n`);
+    const rr = await runResumeScenario({ providerFactory: () => new MockProvider(buggyStatsSolver()) });
+    process.stdout.write(`  abort=${rr.abortStatus} (tests ${rr.testsAfterAbort}) → resume=${rr.resumeStatus} in ${rr.resumeSteps} steps (tests ${rr.testsAfterResume})\n`);
+    for (const c of rr.checkResults) process.stdout.write(`  ${c.passed ? "✓" : "✗"} ${c.name} — ${c.description}\n`);
+    process.stdout.write(`  ${rr.passed ? "PASS" : "FAIL"}\n`);
+    resumeOk = rr.passed;
+  }
+
   const passed = reports.filter((r) => r.passed).length;
-  process.stdout.write(`\n${passed}/${reports.length} eval tasks passed.\n`);
-  if (passed < reports.length) process.exitCode = 1;
+  const total = reports.length + (real ? 0 : 1);
+  const totalPassed = passed + (resumeOk && !real ? 1 : 0);
+  process.stdout.write(`\n${totalPassed}/${total} eval tasks passed.\n`);
+  if (totalPassed < total) process.exitCode = 1;
 }
 
 function printReport(r: EvalReport): void {

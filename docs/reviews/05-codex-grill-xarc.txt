@@ -1,0 +1,86 @@
+Found main balagan.
+
+**Single Highest-Leverage Fix**
+
+Build real crash resumability. Not “durable ledger” as prompt memory. Real durable mission log.
+
+Right now [Ledger](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/ledger.ts:27) is in-memory, [runTask](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/runner.ts:60) creates a fresh one every run, and [ConversationContext](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/context.ts:54) keeps messages in memory. [Tracer](/Users/aktanazat/Documents/projects/personal/maestro/src/obs/tracing.ts:74) appends spans, but it is evidence, not authoritative recovery state. [MEMO](/Users/aktanazat/Documents/projects/personal/maestro/MEMO.md:45) already admits interrupted sessions cannot resume.
+
+Add `src/agent/mission-log.ts`: append-only JSONL checkpoints for goal, ledger snapshots, messages, tool results, phase, gate result. Add `Ledger.fromSnapshot`, `ConversationContext.snapshot/restore`, and `maestro resume <missionId>`. Prove it with one eval: abort after tool 12, start fresh process, resume, finish green. This is the thing CCX reviewer will respect.
+
+**Adopt / Do Not Copy**
+
+Adopt:
+- Durable mission log + checkpoint resume.
+- Acceptance gate as verifier, not prompt instruction. You already have [gate.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/gate.ts:43), but it is not wired into [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:163).
+- Worker self-rejection: before final handoff, spawn readonly diff-audit subagent and require parent to act on findings.
+- Budget meter at provider boundary, before API calls, not only token accounting after response.
+- Manager/Worker as responsibility split: manager owns mission log and human messages; worker owns code changes.
+
+Do not copy:
+- Full RPTIV five-agent cosplay. Current [spawn](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:68) is generic and real. Keep it. Add phase records; do not rename everything to ResearchAgent/PlanAgent if behavior is same.
+- Small-model message screen unless you actually run/simulate one. An interface with “not implemented” is better than fake safety.
+- Visual verification for non-UI fixtures. Mark N/A with reason.
+- CCX terminology in README. Sounds derivative. Say “inspired by crash-resumable agent runtimes; here is my smaller implementation.”
+
+**Reviewer Pokes**
+
+1. “Kill it mid-run. Resume.” Current answer: cannot. Callback killer.
+2. “Is acceptance gate actually enforced?” Current answer: no. `sweAcceptanceGate` exists, but `runAgent` never calls it.
+3. “Is eval autonomous?” Weak. [solver.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:96) scripts exact steps and [exact edits](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:135). Good runtime proof, not model-competence proof.
+4. “Why call demo autonomous if mock provider drives it?” [README](/Users/aktanazat/Documents/projects/personal/maestro/README.md:10) needs sharper honesty.
+5. “Where is safety enclosure?” Permissions/rate limit exist, but no message screen and no pre-call budget gate.
+
+**Top 5 Moves**
+
+1. **Mission log + resume eval.** Highest callback impact. New `mission-log.ts`, restore APIs, `maestro resume`, abort/resume test.
+2. **Wire acceptance gate.** Add `acceptanceGate` to `RunAgentConfig`; before completion, run gate. If failed, feed feedback and continue. Existing [gate.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/gate.ts:43) gives you head start.
+3. **Fix framing.** README/MEMO must say: deterministic eval proves runtime invariants, not live model autonomy. Don’t oversell quota-blocked real run.
+4. **Add self-rejection subagent.** After implementation, spawn readonly audit over diff/tests before commit/final. This maps to CCX “worker rejects own output” without copying RPTIV.
+5. **Add `docs/XARC.md`.** One page: “what aligns with CCX, what I deliberately did not copy, what remains.” Put crash-resume and gate first.
+
+Verification I ran: `npm run typecheck` passed, `npm run eval` passed 4/4. `npm run test` was blocked by read-only sandbox because Vitest writes `node_modules/.vite-temp`.
+tokens used
+119,614
+Found main balagan.
+
+**Single Highest-Leverage Fix**
+
+Build real crash resumability. Not “durable ledger” as prompt memory. Real durable mission log.
+
+Right now [Ledger](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/ledger.ts:27) is in-memory, [runTask](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/runner.ts:60) creates a fresh one every run, and [ConversationContext](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/context.ts:54) keeps messages in memory. [Tracer](/Users/aktanazat/Documents/projects/personal/maestro/src/obs/tracing.ts:74) appends spans, but it is evidence, not authoritative recovery state. [MEMO](/Users/aktanazat/Documents/projects/personal/maestro/MEMO.md:45) already admits interrupted sessions cannot resume.
+
+Add `src/agent/mission-log.ts`: append-only JSONL checkpoints for goal, ledger snapshots, messages, tool results, phase, gate result. Add `Ledger.fromSnapshot`, `ConversationContext.snapshot/restore`, and `maestro resume <missionId>`. Prove it with one eval: abort after tool 12, start fresh process, resume, finish green. This is the thing CCX reviewer will respect.
+
+**Adopt / Do Not Copy**
+
+Adopt:
+- Durable mission log + checkpoint resume.
+- Acceptance gate as verifier, not prompt instruction. You already have [gate.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/gate.ts:43), but it is not wired into [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:163).
+- Worker self-rejection: before final handoff, spawn readonly diff-audit subagent and require parent to act on findings.
+- Budget meter at provider boundary, before API calls, not only token accounting after response.
+- Manager/Worker as responsibility split: manager owns mission log and human messages; worker owns code changes.
+
+Do not copy:
+- Full RPTIV five-agent cosplay. Current [spawn](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:68) is generic and real. Keep it. Add phase records; do not rename everything to ResearchAgent/PlanAgent if behavior is same.
+- Small-model message screen unless you actually run/simulate one. An interface with “not implemented” is better than fake safety.
+- Visual verification for non-UI fixtures. Mark N/A with reason.
+- CCX terminology in README. Sounds derivative. Say “inspired by crash-resumable agent runtimes; here is my smaller implementation.”
+
+**Reviewer Pokes**
+
+1. “Kill it mid-run. Resume.” Current answer: cannot. Callback killer.
+2. “Is acceptance gate actually enforced?” Current answer: no. `sweAcceptanceGate` exists, but `runAgent` never calls it.
+3. “Is eval autonomous?” Weak. [solver.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:96) scripts exact steps and [exact edits](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:135). Good runtime proof, not model-competence proof.
+4. “Why call demo autonomous if mock provider drives it?” [README](/Users/aktanazat/Documents/projects/personal/maestro/README.md:10) needs sharper honesty.
+5. “Where is safety enclosure?” Permissions/rate limit exist, but no message screen and no pre-call budget gate.
+
+**Top 5 Moves**
+
+1. **Mission log + resume eval.** Highest callback impact. New `mission-log.ts`, restore APIs, `maestro resume`, abort/resume test.
+2. **Wire acceptance gate.** Add `acceptanceGate` to `RunAgentConfig`; before completion, run gate. If failed, feed feedback and continue. Existing [gate.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/gate.ts:43) gives you head start.
+3. **Fix framing.** README/MEMO must say: deterministic eval proves runtime invariants, not live model autonomy. Don’t oversell quota-blocked real run.
+4. **Add self-rejection subagent.** After implementation, spawn readonly audit over diff/tests before commit/final. This maps to CCX “worker rejects own output” without copying RPTIV.
+5. **Add `docs/XARC.md`.** One page: “what aligns with CCX, what I deliberately did not copy, what remains.” Put crash-resume and gate first.
+
+Verification I ran: `npm run typecheck` passed, `npm run eval` passed 4/4. `npm run test` was blocked by read-only sandbox because Vitest writes `node_modules/.vite-temp`.

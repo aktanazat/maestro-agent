@@ -50,6 +50,25 @@ program
   });
 
 program
+  .command("resume")
+  .description("Resume a crashed/interrupted run from its durable mission log.")
+  .argument("<missionId>", "Mission id (see .maestro/missions/ in the repo).")
+  .option("-r, --repo <path>", "The same workspace the run started in.", ".")
+  .action(async (missionId: string, options: { repo: string }) => {
+    const config = loadConfig();
+    const logger = createLogger({ level: config.logLevel, pretty: config.logPretty, base: { component: "maestro" } });
+    try {
+      const result = await runTask({ goal: "(resumed)", workspace: resolve(options.repo), config, logger, resumeMissionId: missionId });
+      logger.info({ status: result.status, steps: result.steps, gate: result.gate?.passed }, "resume complete");
+      process.stdout.write(`\n${result.finalText}\n`);
+      process.exitCode = result.status === "completed" ? 0 : 2;
+    } catch (err) {
+      logger.error({ err: err instanceof MaestroError ? err.toJSON() : err }, "resume failed");
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command("eval")
   .description("Run the evaluation suite (deterministic mock solver by default, --real for the live model).")
   .option("--real", "Run against the live Anthropic model instead of the mock solver.", false)

@@ -104,7 +104,7 @@ export class Ledger {
     return lines.join("\n");
   }
 
-  snapshot() {
+  snapshot(): LedgerSnapshot {
     return {
       goal: this.goal,
       plan: this.plan.map((p) => ({ ...p })),
@@ -112,6 +112,23 @@ export class Ledger {
       fileDigests: Object.fromEntries(this.fileDigests),
     };
   }
+
+  /** Rebuild a ledger from a snapshot — the durable half of crash-resumable execution. */
+  static fromSnapshot(snap: LedgerSnapshot): Ledger {
+    const l = new Ledger(snap.goal);
+    l.plan = snap.plan.map((p) => ({ ...p }));
+    l.facts = snap.facts.map((f) => ({ ...f }));
+    l.fileDigests = new Map(Object.entries(snap.fileDigests));
+    l.nextId = l.plan.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+    return l;
+  }
+}
+
+export interface LedgerSnapshot {
+  goal: string;
+  plan: PlanItem[];
+  facts: Fact[];
+  fileDigests: Record<string, string>;
 }
 
 function statusGlyph(s: PlanStatus): string {

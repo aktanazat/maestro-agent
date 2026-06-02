@@ -88,6 +88,13 @@ export class ConversationContext {
     return this.messages;
   }
 
+  /** Restore the message window from a checkpoint — the lossy half of crash-resume (the ledger
+   * is the durable half). Used by `maestro resume` to rebuild a run's context in a fresh process. */
+  restore(messages: ModelMessage[], compactions = 0): void {
+    this.messages = messages.map((m) => ({ role: m.role, content: [...m.content] }));
+    this.compactions = compactions;
+  }
+
   estimatedTokens(): number {
     return estimateMessageTokens(this.messages) + this.provider.estimateTokens(this.systemPrompt());
   }

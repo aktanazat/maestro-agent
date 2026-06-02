@@ -5,6 +5,7 @@ import { ConversationContext } from "./context.js";
 import type { Logger } from "../obs/logger.js";
 import type { Tracer, Span } from "../obs/tracing.js";
 import { BudgetExceededError, MaestroError, asMaestroError } from "../resilience/errors.js";
+import type { AcceptanceGate, GateResult } from "./gate.js";
 
 export interface Budgets {
   maxSteps: number;
@@ -32,6 +33,8 @@ export interface AgentRunResult {
   structured?: unknown;
   toolCalls: ToolCallRecord[];
   compactions: number;
+  /** Final acceptance-gate result (top-level runs only), proving the work actually passed. */
+  gate?: GateResult;
   error?: MaestroError;
 }
 
@@ -60,6 +63,10 @@ export interface RunAgentConfig {
   completionTool?: CompletionTool;
   /** Optional terminal check on the ledger (top-level agent stops when plan complete). */
   isDone?: (ctx: ConversationContext) => boolean;
+  /** Acceptance gate: completion is refused until this is green (top-level agent). */
+  gate?: AcceptanceGate;
+  /** Durable mission log — checkpoints written each step so the run can resume after a crash. */
+  missionLog?: import("./mission-log.js").MissionLog;
   /** Per-call max output tokens for the model. */
   maxOutputTokens?: number;
   temperature?: number;
@@ -104,6 +111,9 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
   let lastError: MaestroError | undefined;
   let nudges = 0;
   const MAX_NUDGES = 2;
+  let gateResult: GateResult | undefined;
+  let gateAttempts = 0;
+  const MAX_GATE_ATTEMPTS = 3;
 
   try {
     for (;;) {
@@ -162,9 +172,28 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
 
       if (toolUses.length === 0) {
         if (!config.completionTool) {
-          // Top-level agent stopped calling tools. If its plan still has open steps, don't take
-          // the silence as success — nudge it (bounded) to either finish the work or explicitly
-          // mark the remaining steps done/blocked. This closes the early-quit hole.
+          // The model thinks it is done. Before we believe it, run the ACCEPTANCE GATE: it runs
+          // the tests/build/git/plan checks itself. The model's "done" is a claim; the gate is
+          // proof. A failing gate is fed back and the run continues until it is green (bounded).
+          if (config.gate) {
+            gateResult = await config.gate({ registry, ctx: toolCtx, planComplete: () => context.ledger.planComplete() });
+            config.missionLog?.append({ kind: "gate", passed: gateResult.passed, result: gateResult });
+            if (gateResult.passed) {
+              status = "completed";
+              break;
+            }
+            if (gateAttempts < MAX_GATE_ATTEMPTS) {
+              gateAttempts += 1;
+              logger.warn({ gateAttempts, failed: gateResult.checks.filter((c) => !c.ok).map((c) => c.name) }, "acceptance gate not green; continuing");
+              span.addEvent("gate_failed", { attempt: gateAttempts });
+              context.pushUser([{ type: "text", text: gateResult.feedback }]);
+              continue;
+            }
+            logger.error({ checks: gateResult.checks }, "acceptance gate still failing after retries");
+            status = "max_steps";
+            break;
+          }
+          // No gate configured: fall back to the plan-completeness nudge.
           if (config.isDone && !config.isDone(context) && nudges < MAX_NUDGES) {
             nudges += 1;
             logger.warn({ nudges }, "model stopped with an incomplete plan; nudging");
@@ -252,11 +281,25 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
       config.onStep?.(stepRecords);
       context.pushToolResults(results);
 
+      // Checkpoint: persist the ledger + message window so a crash here can be resumed exactly.
+      if (config.missionLog) {
+        for (const r of stepRecords) config.missionLog.append({ kind: "tool", step: r.step, name: r.name, ok: r.ok });
+        config.missionLog.append({
+          kind: "checkpoint",
+          step: steps,
+          ledger: context.ledger.snapshot(),
+          messages: context.view(),
+          compactions: context.stats().compactions,
+        });
+      }
+
       if (completed) {
         status = "completed";
         break;
       }
-      if (config.isDone?.(context)) {
+      // When an acceptance gate is configured, do NOT auto-complete on plan completion — let the
+      // model stop, then the gate decides. Otherwise plan-complete is the terminal signal.
+      if (!config.gate && config.isDone?.(context)) {
         status = "completed";
         break;
       }
@@ -270,6 +313,7 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
     span.setAttribute("tokensUsed", tokensUsed);
     span.setAttribute("status", status);
     span.end(status === "error" ? "error" : "ok");
+    config.missionLog?.append({ kind: "end", status, steps });
   }
 
   if (status === "max_steps" || status === "max_tokens") {
@@ -284,6 +328,7 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
     structured,
     toolCalls,
     compactions: context.stats().compactions,
+    gate: gateResult,
     error: lastError,
   };
 }
