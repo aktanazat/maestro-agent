@@ -1,4 +1,4 @@
-# Live Anthropic integration. observed evidence
+# Live Anthropic integration: observed evidence
 
 The eval is deterministic (mock provider), so the fair question is: does the live path actually
 work, or is `AnthropicProvider` vaporware? It works. Here is the real sequence I observed driving
