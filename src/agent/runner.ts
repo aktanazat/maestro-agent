@@ -31,6 +31,8 @@ export interface TaskOptions {
   onStep?: (records: import("./loop.js").ToolCallRecord[]) => void;
   /** Observe every tool dispatch (validated I/O) — used by the eval harness to assert data flow. */
   onToolResult?: import("../tools/types.js").ToolServices["onToolResult"];
+  /** Observe each context compaction — used by the live activity view. */
+  onCompact?: import("./context.js").ContextOptions["onCompact"];
 }
 
 export interface TaskResult extends AgentRunResult {
@@ -66,6 +68,7 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     compactionThreshold: opts.config.context.compactionThreshold,
     recencyKeep: opts.config.context.recencyKeep,
     logger,
+    onCompact: opts.onCompact,
   });
   context.pushUser([{ type: "text", text: `Goal:\n${opts.goal}` }]);
 

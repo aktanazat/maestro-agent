@@ -23,6 +23,8 @@ export interface ContextOptions {
   recencyKeep?: number;
   summarizer?: Summarizer;
   logger?: Logger;
+  /** Observability hook fired whenever a compaction occurs (used by the live activity view). */
+  onCompact?: (info: { dropped: number; compactions: number; tokensBefore: number }) => void;
 }
 
 export interface ContextStats {
@@ -47,6 +49,7 @@ export class ConversationContext {
   private readonly recencyKeep: number;
   private readonly summarizer: Summarizer;
   private readonly logger?: Logger;
+  private readonly onCompact?: ContextOptions["onCompact"];
 
   private messages: ModelMessage[] = [];
   private compactions = 0;
@@ -60,6 +63,7 @@ export class ConversationContext {
     this.recencyKeep = opts.recencyKeep ?? 8;
     this.summarizer = opts.summarizer ?? defaultSummarizer;
     this.logger = opts.logger;
+    this.onCompact = opts.onCompact;
   }
 
   /** System prompt = static base + live ledger. Rebuilt each turn so it never goes stale. */
@@ -115,10 +119,9 @@ export class ConversationContext {
     const stale = this.messages.slice(0, cut);
     const recap = await this.summarizer(stale);
     this.compactions += 1;
-    this.logger?.info(
-      { compactions: this.compactions, dropped: stale.length, tokensBefore: this.estimatedTokens() },
-      "compacting context",
-    );
+    const tokensBefore = this.estimatedTokens();
+    this.logger?.info({ compactions: this.compactions, dropped: stale.length, tokensBefore }, "compacting context");
+    this.onCompact?.({ dropped: stale.length, compactions: this.compactions, tokensBefore });
     this.messages = [
       {
         role: "user",
