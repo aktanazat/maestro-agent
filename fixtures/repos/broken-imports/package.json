@@ -1,0 +1,10 @@
+{
+  "name": "broken-imports",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Multi-file fixture: the bug lives in a helper used by another module.",
+  "scripts": {
+    "test": "node test/run.mjs"
+  }
+}

@@ -23,20 +23,25 @@ Each of the five required properties does real work:
    compaction.
 4. **Production scaffolding.** pino logs, a JSONL span tracer, exponential backoff with jitter,
    a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness,
-   a per-run project index that walks the tree once instead of once per `code.*` call, and 46 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
+   a per-run project index that walks the tree once instead of once per `code.*` call, and 51 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
 5. **Composable I/O.** `shell.run_tests` and `code.localize_failure` share one `TestRunResult`
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.
 
 The eval harness materializes a fixture repo with seeded bugs into a temporary git repo, runs
 the agent, then runs the fixture's own suite to confirm the bugs are fixed. That is a
-SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvider`.
+SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvider`. Four tasks
+span three fixtures (a flagship multi-bug repo, a cross-file import bug, and a pagination repo),
+so the harness is shown to generalize rather than fit one scenario.
 
 ## What I cut
 
-- **Real-model eval at scale.** `--real` runs the suite against the live model, but I tuned and
-  proved correctness on the deterministic solver. There is no multi-repo benchmark or
-  statistical scoring across many tasks yet.
+- **Full live end-to-end run.** The live Anthropic path is wired and verified at the protocol
+  level (it exposed and I fixed two real bugs: dotted tool names and OpenAPI-form schemas that the
+  API rejects). I drove it with a Claude Code OAuth token; the request shape is now accepted (the
+  failures moved from 400 to 429). A complete autonomous run was blocked by the subscription's
+  burst rate limit, which a pay-per-token key removes. I did not build a multi-repo benchmark or
+  statistical scoring across many tasks.
 - **Persistence and resumability.** A run is in-memory. Traces are written, but an interrupted
   session cannot be checkpointed and resumed.
 - **Richer code intelligence.** `code.*` uses regex and heuristics rather than a real AST or

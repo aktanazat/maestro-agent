@@ -57,10 +57,10 @@ CLI (commander) -> runTask (composition root)
 
 ```bash
 npm install
-cp .env.example .env        # set ANTHROPIC_API_KEY for live runs
+cp .env.example .env        # set ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) for live runs
 
-npm run test                # 46 unit + integration tests
-npm run eval                # deterministic eval suite (mock solver, no API key)
+npm run test                # 51 unit + integration tests
+npm run eval                # 4 deterministic eval tasks across 3 fixtures (no API key)
 npm run eval -- --real      # same tasks against the live model
 npm run build && node dist/index.js run "fix the failing tests" --repo ./path
 node dist/index.js run "audit this repo" --repo ./path --permission readonly   # observe-only run
@@ -71,6 +71,16 @@ calls with mandatory subagent delegation and the run_tests-to-localize compositi
 task runs the same goal under a tiny context budget that forces compaction partway through, then
 asserts the plan survived and the tests are green. Both run with no network through the
 deterministic solver, so CI exercises the whole machine on every push.
+
+## Authentication
+
+Live runs use one of two credentials, read from the environment:
+
+- `ANTHROPIC_API_KEY` for a standard pay-per-token API key.
+- `ANTHROPIC_AUTH_TOKEN` for a Claude Code OAuth (subscription) token. In this mode the provider
+  sends a Bearer token with the oauth beta header and prepends the Claude Code identity that the
+  API requires. Subscription tokens are rate-limited for burst use, so a long autonomous run may
+  throttle; a pay-per-token key runs without that limit.
 
 ## Observability
 

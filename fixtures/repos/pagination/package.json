@@ -1,0 +1,10 @@
+{
+  "name": "pagination",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixture with two arithmetic/off-by-one bugs in pagination logic.",
+  "scripts": {
+    "test": "node test/run.mjs"
+  }
+}

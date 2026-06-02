@@ -1,7 +1,5 @@
-import { MockProvider } from "../llm/mock.js";
-import { buggyStatsSolver } from "./solver.js";
 import { runEval, type EvalReport } from "./harness.js";
-import { TASKS } from "./tasks.js";
+import { TASKS, SOLVERS } from "./tasks.js";
 import { loadConfig } from "../config.js";
 import { AnthropicProvider } from "../llm/anthropic.js";
 import { createLogger } from "../obs/logger.js";
@@ -26,7 +24,7 @@ export async function main(argv: string[]): Promise<void> {
           model: cfg.model,
           logger: createLogger({ level: "warn" }),
         })
-      : new MockProvider(buggyStatsSolver());
+      : (SOLVERS[task.id] ?? (() => { throw new Error(`no deterministic solver for ${task.id}`); }))();
     const config = real ? loadConfig() : loadConfig({ provider: "mock" });
     process.stdout.write(`\n▶ ${task.id}${real ? " (real model)" : " (mock solver)"}\n`);
     const report = await runEval(task, { provider, config });

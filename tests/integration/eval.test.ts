@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MockProvider } from "../../src/llm/mock.js";
 import { buggyStatsSolver } from "../../src/eval/solver.js";
 import { runEval } from "../../src/eval/harness.js";
-import { TASKS } from "../../src/eval/tasks.js";
+import { TASKS, SOLVERS } from "../../src/eval/tasks.js";
 import { loadConfig } from "../../src/config.js";
 
 /**
@@ -33,4 +33,15 @@ describe("eval harness end-to-end (mock solver)", () => {
     expect(report.checkResults.find((c) => c.name === "tests_pass")!.passed).toBe(true);
     expect(report.checkResults.find((c) => c.name === "plan_complete")!.passed).toBe(true);
   });
+
+  // The harness is not hardcoded to one repo: the same machinery fixes distinct bug shapes
+  // across separate fixtures, driven by the data-parameterized fixer solver.
+  for (const id of ["broken-imports:cross-file-fix", "pagination:two-arithmetic-bugs"]) {
+    it(`fixes and verifies the ${id} fixture deterministically`, async () => {
+      const task = TASKS.find((t) => t.id === id)!;
+      const report = await runEval(task, { provider: SOLVERS[id]!(), config: loadConfig({ provider: "mock" }) });
+      expect(report.passed).toBe(true);
+      expect(report.checkResults.find((c) => c.name === "tests_pass")!.passed).toBe(true);
+    });
+  }
 });

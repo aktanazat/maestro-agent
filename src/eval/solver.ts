@@ -26,6 +26,70 @@ function isSubagent(req: ModelRequest): boolean {
   return req.system.includes("focused sub-agent");
 }
 
+/**
+ * A compact, data-driven solver for any "fix N substring bugs, then verify" fixture. It proves
+ * the harness is not hardcoded to one repo: the same ledger-driven machinery (plan → run_tests →
+ * localize → edit → re-verify → commit) drives broken-imports and pagination from a list of
+ * edits. The flagship buggy-stats solver keeps the heavier load (subagent + 20+ calls + the
+ * forced-compaction case); these prove generality on different bug shapes and multiple files.
+ */
+export function fixerSolver(edits: Array<{ path: string; oldString: string; newString: string }>): (req: ModelRequest) => ModelResponse {
+  const steps: Array<{ text: string; tool: string; action: (req: ModelRequest) => ModelResponse }> = [
+    { text: "Run the failing suite", tool: "shell.run_tests", action: () => callTool("shell.run_tests", {}) },
+    {
+      text: "Localize the failures",
+      tool: "code.localize_failure",
+      action: (req) => {
+        const testRun = lastResultFor<TestRunResult>(req.messages, "shell.run_tests");
+        return testRun ? callTool("code.localize_failure", { testRun }) : callTool("shell.run_tests", {});
+      },
+    },
+    ...edits.map((e, i) => ({
+      text: `Apply fix ${i + 1} (${e.path})`,
+      tool: "fs.edit",
+      action: () => callTool("fs.edit", { path: e.path, oldString: e.oldString, newString: e.newString }),
+    })),
+    { text: "Re-run to verify green", tool: "shell.run_tests", action: () => callTool("shell.run_tests", {}) },
+    { text: "Commit the fix", tool: "git.commit_all", action: () => callTool("git.commit_all", { message: "fix: correct the seeded bugs" }) },
+  ];
+
+  return (req) => {
+    const plan = parsePlan(req.system);
+    if (plan.length === 0) return callTool("plan.set", { steps: steps.map((s) => s.text) }, { text: "Planning the fix." });
+    const current = plan.find((p) => p.status !== "done");
+    if (!current) return say("Fixed and verified. Done.");
+    const step = steps[current.id - 1];
+    if (!step) return say("Plan complete.");
+    const last = lastToolCall(req.messages);
+    // fs.edit appears for several steps; advance only when THIS step's edit (by oldString) landed.
+    const isEditStep = step.tool === "fs.edit";
+    const editApplied =
+      isEditStep &&
+      last?.name === "fs.edit" &&
+      last.ok &&
+      editJustApplied(req, edits[current.id - 3]?.oldString);
+    if ((last && last.ok && last.name === step.tool && !isEditStep) || editApplied) {
+      return callTool("plan.update", { id: current.id, status: "done" });
+    }
+    return step.action(req);
+  };
+}
+
+/** True if the most recent fs.edit used the given oldString (so distinct edit steps don't collide). */
+function editJustApplied(req: ModelRequest, oldString: string | undefined): boolean {
+  if (!oldString) return true;
+  for (let i = req.messages.length - 1; i >= 0; i--) {
+    const m = req.messages[i]!;
+    if (m.role !== "assistant") continue;
+    for (const b of m.content) {
+      if (b.type === "tool_use" && b.name === "fs.edit") {
+        return String((b.input as { oldString?: string }).oldString ?? "") === oldString;
+      }
+    }
+  }
+  return false;
+}
+
 // The ordered plan. Each step maps to exactly one tool action; the solver performs the action,
 // then on the following turn marks the step done — a cadence that keeps a >20-call session
 // entirely anchored to durable plan state.
