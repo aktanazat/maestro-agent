@@ -89,9 +89,10 @@ export class ConversationContext {
   }
 
   /** Restore the message window from a checkpoint — the lossy half of crash-resume (the ledger
-   * is the durable half). Used by `maestro resume` to rebuild a run's context in a fresh process. */
+   * is the durable half). A crash can leave a tool_use unanswered in the last checkpoint; repair
+   * backfills it so the resumed stream is valid for the API. Used by `maestro resume`. */
   restore(messages: ModelMessage[], compactions = 0): void {
-    this.messages = messages.map((m) => ({ role: m.role, content: [...m.content] }));
+    this.messages = repairToolPairing(messages.map((m) => ({ role: m.role, content: [...m.content] })));
     this.compactions = compactions;
   }
 
@@ -180,4 +181,38 @@ export function defaultSummarizer(messages: ModelMessage[]): string {
 function clip(s: string, n: number): string {
   const flat = s.replace(/\s+/g, " ").trim();
   return flat.length > n ? flat.slice(0, n) + "…" : flat;
+}
+
+/**
+ * After a crash, the last checkpoint may hold an assistant turn whose tool_uses were not all
+ * answered (the run died mid-batch). The Anthropic API rejects an unanswered tool_use, so on
+ * resume we backfill the missing tool_results with an "interrupted" marker — which is also the
+ * right signal to the model: re-evaluate, that step did not finish.
+ */
+export function repairToolPairing(messages: ModelMessage[]): ModelMessage[] {
+  let ai = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]!.role === "assistant" && messages[i]!.content.some((b) => b.type === "tool_use")) {
+      ai = i;
+      break;
+    }
+  }
+  if (ai < 0) return messages;
+  const useIds = messages[ai]!.content.filter((b) => b.type === "tool_use").map((b) => (b as { id: string }).id);
+  const answered = new Set<string>();
+  for (let i = ai + 1; i < messages.length; i++) {
+    for (const b of messages[i]!.content) if (b.type === "tool_result") answered.add(b.tool_use_id);
+  }
+  const missing = useIds.filter((id) => !answered.has(id));
+  if (missing.length === 0) return messages;
+  const backfill: ContentBlock[] = missing.map((id) => ({
+    type: "tool_result",
+    tool_use_id: id,
+    content: JSON.stringify({ error: "INTERRUPTED", message: "step did not complete before the crash; re-evaluate" }),
+    is_error: true,
+  }));
+  const next = messages[ai + 1];
+  if (next && next.role === "user") next.content.push(...backfill);
+  else messages.splice(ai + 1, 0, { role: "user", content: backfill });
+  return messages;
 }

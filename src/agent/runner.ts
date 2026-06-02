@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { Config } from "../config.js";
 import type { ModelProvider } from "../llm/provider.js";
 import { AnthropicProvider } from "../llm/anthropic.js";
@@ -70,7 +71,11 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
   // Mission log: durable, append-only, the record a run resumes from after a crash.
   const missionsDir = join(workspace, ".maestro", "missions");
   const resuming = Boolean(opts.resumeMissionId);
-  const missionId = opts.resumeMissionId ?? `mission-${Date.now().toString(36)}`;
+  if (opts.resumeMissionId && !/^[A-Za-z0-9_-]+$/.test(opts.resumeMissionId)) {
+    throw new ConfigError(`invalid mission id "${opts.resumeMissionId}" (must match [A-Za-z0-9_-])`);
+  }
+  // Random, collision-free id (timestamp-only ids collide under concurrency); path-segment safe.
+  const missionId = opts.resumeMissionId ?? `mission-${randomUUID()}`;
   const missionLog =
     opts.missionLog === null ? undefined : new MissionLog({ missionId, dir: missionsDir, now: () => Date.now() });
   const checkpoint = resuming ? MissionLog.lastCheckpoint(MissionLog.resolvePath(missionsDir, missionId)) : null;
@@ -143,6 +148,7 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     isDone: (c) => c.ledger.planComplete(),
     gate: opts.gate === null ? undefined : (opts.gate ?? sweAcceptanceGate),
     missionLog,
+    startStep: checkpoint?.step,
     onStep: opts.onStep,
   });
 

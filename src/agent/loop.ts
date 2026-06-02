@@ -67,6 +67,8 @@ export interface RunAgentConfig {
   gate?: AcceptanceGate;
   /** Durable mission log — checkpoints written each step so the run can resume after a crash. */
   missionLog?: import("./mission-log.js").MissionLog;
+  /** Seed the step counter on resume so the audit trail continues instead of restarting at 0. */
+  startStep?: number;
   /** Per-call max output tokens for the model. */
   maxOutputTokens?: number;
   temperature?: number;
@@ -103,7 +105,7 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
   };
 
   const toolCalls: ToolCallRecord[] = [];
-  let steps = 0;
+  let steps = config.startStep ?? 0;
   let tokensUsed = 0;
   let finalText = "";
   let structured: unknown;
@@ -261,6 +263,21 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
           stepRecords.push({ step: steps, name: use.name, ok: false, durationMs: Date.now() - t0, errorCode: me.code });
         }
 
+        // Checkpoint AFTER EACH TOOL, not after the batch: a crash right after a tool's side
+        // effect is then recoverable from a checkpoint that already accounts for it. The provisional
+        // results so far are included; restore() repairs any tool_use the crash left unanswered.
+        if (config.missionLog) {
+          const rec = stepRecords[stepRecords.length - 1];
+          if (rec) config.missionLog.append({ kind: "tool", step: rec.step, name: rec.name, ok: rec.ok });
+          config.missionLog.append({
+            kind: "checkpoint",
+            step: steps,
+            ledger: context.ledger.snapshot(),
+            messages: [...context.view(), { role: "user", content: [...results] }],
+            compactions: context.stats().compactions,
+          });
+        }
+
         if (steps >= budgets.maxSteps) break;
       }
 
@@ -282,18 +299,8 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
       toolCalls.push(...stepRecords);
       config.onStep?.(stepRecords);
       context.pushToolResults(results);
-
-      // Checkpoint: persist the ledger + message window so a crash here can be resumed exactly.
-      if (config.missionLog) {
-        for (const r of stepRecords) config.missionLog.append({ kind: "tool", step: r.step, name: r.name, ok: r.ok });
-        config.missionLog.append({
-          kind: "checkpoint",
-          step: steps,
-          ledger: context.ledger.snapshot(),
-          messages: context.view(),
-          compactions: context.stats().compactions,
-        });
-      }
+      // Per-tool checkpoints (above) already captured each step; the post-batch state matches the
+      // last one, so there is nothing extra to persist here.
 
       if (completed) {
         status = "completed";

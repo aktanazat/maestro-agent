@@ -79,8 +79,21 @@ export const sweAcceptanceGate: AcceptanceGate = async ({ registry, ctx, planCom
     // Not a git repo — this check does not apply.
   }
 
-  // 4) The plan must be closed out (every step done or explicitly blocked).
-  if (planComplete) {
+  // 4) The plan must be genuinely DONE. A `blocked` step is terminal for loop control but it is
+  // NOT done — letting it pass the gate would let the model mark hard work "blocked" and still
+  // ship a green run. So blocked steps fail the gate and are surfaced by name.
+  const plan = ctx.services.ledger?.getPlan() ?? [];
+  if (plan.length) {
+    const blocked = plan.filter((p) => p.status === "blocked");
+    const pending = plan.filter((p) => p.status !== "done" && p.status !== "blocked");
+    const ok = pending.length === 0 && blocked.length === 0;
+    const detail = ok
+      ? "all steps done"
+      : blocked.length
+        ? `${blocked.length} blocked step(s): ${blocked.map((p) => p.text).join("; ").slice(0, 80)}`
+        : `${pending.length} open step(s)`;
+    checks.push({ name: "plan_complete", ok, required: true, detail });
+  } else if (planComplete) {
     const ok = planComplete();
     checks.push({ name: "plan_complete", ok, required: true, detail: ok ? "all steps terminal" : "open plan steps remain" });
   }
