@@ -176,7 +176,9 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
           // the tests/build/git/plan checks itself. The model's "done" is a claim; the gate is
           // proof. A failing gate is fed back and the run continues until it is green (bounded).
           if (config.gate) {
+            toolCtx.services.gatePhase = true;
             gateResult = await config.gate({ registry, ctx: toolCtx, planComplete: () => context.ledger.planComplete() });
+            toolCtx.services.gatePhase = false;
             config.missionLog?.append({ kind: "gate", passed: gateResult.passed, result: gateResult });
             if (gateResult.passed) {
               status = "completed";

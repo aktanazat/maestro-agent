@@ -30,7 +30,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const out = (s = "") => process.stdout.write(s + "\n");
 
 type Ev =
-  | { t: "tool"; name: string; input: unknown; output?: unknown; ok: boolean }
+  | { t: "tool"; name: string; input: unknown; output?: unknown; ok: boolean; gate?: boolean }
   | { t: "compact"; dropped: number; compactions: number };
 
 async function main() {
@@ -48,7 +48,7 @@ async function main() {
     config,
     provider: new MockProvider(buggyStatsSolver()),
     logger: silentLogger(),
-    onToolResult: (e) => events.push({ t: "tool", name: e.name, input: e.input, output: e.output, ok: e.ok }),
+    onToolResult: (e) => events.push({ t: "tool", name: e.name, input: e.input, output: e.output, ok: e.ok, gate: e.gate }),
     onCompact: (c) => events.push({ t: "compact", dropped: c.dropped, compactions: c.compactions }),
   });
 
@@ -61,11 +61,13 @@ async function main() {
   out();
   await sleep(1600);
 
-  await run;
+  const result = await run;
 
   // Replay the captured activity with pacing so you can watch the agent work.
   let planSteps: string[] = [];
   for (const ev of events) {
+    // Gate verification checks are rendered as one clean block at the end, not in the stream.
+    if (ev.t === "tool" && ev.gate) continue;
     if (ev.t === "compact") {
       out(`  ${C.yellow}⟳ context compacted${C.reset} ${C.dim}— ${ev.dropped} stale messages folded into a summary; plan + facts preserved${C.reset}`);
       await sleep(650);
@@ -112,10 +114,22 @@ async function main() {
     }
   }
 
+  // The acceptance gate: the runtime's own verification before it will accept "done".
+  if (result.gate) {
+    out();
+    out(`  ${C.mag}▣ acceptance gate${C.reset} ${C.dim}— the runtime verifies "done", it doesn't take the model's word${C.reset}`);
+    await sleep(500);
+    for (const c of result.gate.checks) {
+      out(`     ${c.ok ? C.green + "✓" : C.red + "✗"}${C.reset} ${c.name} ${C.dim}— ${c.detail}${C.reset}`);
+      await sleep(300);
+    }
+    await sleep(400);
+  }
+
   // Verify for real, then close.
   out();
   const verify = await runCommand("npm", ["test", "--silent"], { cwd: ws, timeoutMs: 60_000 });
-  const tools = events.filter((e) => e.t === "tool").length;
+  const tools = events.filter((e) => e.t === "tool" && !e.gate).length;
   const subs = events.filter((e) => e.t === "tool" && e.name === "agent.spawn").length;
   const comps = events.filter((e) => e.t === "compact").length;
   out(
@@ -125,7 +139,7 @@ async function main() {
   out();
   out(`  ${C.cyan}${tools} tool calls${C.reset} ${C.dim}·${C.reset} ${C.cyan}${subs} subagent${C.reset} ${C.dim}·${C.reset} ${C.cyan}${comps} compaction${C.reset} ${C.dim}· plan stayed coherent the whole way${C.reset}`);
   await sleep(700);
-  out(`  ${C.dim}under the hood: 60 tools · model-driven selection · retries + backoff · rate limits · typed errors · 51 tests${C.reset}`);
+  out(`  ${C.dim}under the hood: 60 tools · model-driven selection · retries + backoff · rate limits · typed errors · crash-resume · 59 tests${C.reset}`);
   out();
 }
 

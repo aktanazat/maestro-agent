@@ -34,6 +34,8 @@ export interface ToolServices {
   projectIndex?: ProjectIndexHandle;
   /** Permission policy. Returns a denial reason to block a tool, or null/undefined to allow. */
   checkPermission?: (tool: { name: string; effect: Tool["effect"]; risk: Tool["risk"] }) => string | null | undefined;
+  /** Set while the acceptance gate runs its checks, so observers can tell them from agent actions. */
+  gatePhase?: boolean;
 }
 
 export interface ProjectIndexHandle {
@@ -50,6 +52,8 @@ export interface ToolResultEvent {
   ok: boolean;
   durationMs: number;
   errorCode?: string;
+  /** True if this dispatch was a gate verification check, not a model-driven action. */
+  gate?: boolean;
 }
 
 /** Structural view of the Ledger so tools need not import the agent layer (avoids cycles). */

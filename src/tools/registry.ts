@@ -168,7 +168,7 @@ export class ToolRegistry {
       // A write/exec tool may have changed the tree; drop the cached project index so later
       // reads see fresh state. Centralizing this here means no individual tool has to remember.
       if (tool.effect === "write" || tool.effect === "exec") ctx.services.projectIndex?.invalidate();
-      ctx.services.onToolResult?.({ name, input: parsedInput.data, output: parsedOutput.data, ok: true, durationMs });
+      ctx.services.onToolResult?.({ name, input: parsedInput.data, output: parsedOutput.data, ok: true, durationMs, gate: ctx.services.gatePhase });
       return parsedOutput.data;
     } catch (err) {
       const me = asMaestroError(err, "TOOL_EXECUTION_FAILED");
@@ -178,7 +178,7 @@ export class ToolRegistry {
       // A failed or timed-out write/exec may still have partially mutated the tree, so the cache
       // must be dropped on the error path too — not only on success.
       if (tool.effect === "write" || tool.effect === "exec") ctx.services.projectIndex?.invalidate();
-      ctx.services.onToolResult?.({ name, input: parsedInput.data, ok: false, durationMs: Date.now() - t0, errorCode: me.code });
+      ctx.services.onToolResult?.({ name, input: parsedInput.data, ok: false, durationMs: Date.now() - t0, errorCode: me.code, gate: ctx.services.gatePhase });
       throw me;
     }
   }
