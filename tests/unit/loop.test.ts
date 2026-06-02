@@ -49,6 +49,44 @@ describe("agent loop", () => {
     expect(result.steps).toBeGreaterThanOrEqual(3);
   });
 
+  it("matches every tool_use with a tool_result even when the step budget cuts a multi-tool turn", async () => {
+    const registry = new ToolRegistry().register(ping("ok"));
+    // One assistant turn emitting TWO tool_use blocks; maxSteps=1 cuts after the first.
+    const provider = new MockProvider(() => ({
+      stopReason: "tool_use",
+      model: "mock",
+      usage: { inputTokens: 0, outputTokens: 1 },
+      content: [
+        { type: "tool_use", id: "a1", name: "test.ping", input: {} },
+        { type: "tool_use", id: "a2", name: "test.ping", input: {} },
+      ],
+    }));
+    const { context } = harness(provider);
+    const result = await runAgent({
+      provider,
+      registry,
+      context,
+      budgets: { maxSteps: 1, maxTokens: 1_000_000 },
+      services: {},
+      workspace: "/tmp",
+      logger: silentLogger(),
+      tracer: noopTracer(),
+    });
+    expect(result.status).toBe("max_steps");
+    const toolUseIds = context
+      .view()
+      .flatMap((m) => m.content)
+      .filter((b) => b.type === "tool_use")
+      .map((b) => (b as { id: string }).id);
+    const resultIds = context
+      .view()
+      .flatMap((m) => m.content)
+      .filter((b) => b.type === "tool_result")
+      .map((b) => (b as { tool_use_id: string }).tool_use_id);
+    // Both tool_use ids are answered — no orphan that would 400 the API.
+    expect(new Set(resultIds)).toEqual(new Set(toolUseIds));
+  });
+
   it("feeds a failed tool back as an error result instead of crashing the run", async () => {
     const registry = new ToolRegistry().register(ping("throw"));
     // First turn calls the throwing tool; second turn ends the run.

@@ -214,6 +214,21 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
         if (steps >= budgets.maxSteps) break;
       }
 
+      // Invariant: every tool_use in the assistant turn MUST get a tool_result, or the next
+      // request to the Anthropic API is malformed (400). A mid-turn budget cutoff can skip
+      // some tool_uses — backfill them with a synthetic error result so history stays valid.
+      const answered = new Set(results.map((r) => r.tool_use_id));
+      for (const use of toolUses) {
+        if (!answered.has(use.id)) {
+          results.push({
+            type: "tool_result",
+            tool_use_id: use.id,
+            content: JSON.stringify({ error: "NOT_EXECUTED", message: "skipped: step budget reached before execution" }),
+            is_error: true,
+          });
+        }
+      }
+
       toolCalls.push(...stepRecords);
       config.onStep?.(stepRecords);
       context.pushToolResults(results);
