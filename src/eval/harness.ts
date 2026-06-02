@@ -8,6 +8,7 @@ import type { ModelProvider } from "../llm/provider.js";
 import { runCommand } from "../util/exec.js";
 import { silentLogger } from "../obs/logger.js";
 import { Tracer } from "../obs/tracing.js";
+import type { ToolResultEvent } from "../tools/types.js";
 
 const FIXTURES_ROOT = resolve(fileURLToPath(new URL("../../fixtures/repos", import.meta.url)));
 
@@ -22,6 +23,8 @@ export interface ScoreContext {
   result: TaskResult;
   /** Result of running the fixture's own test suite AFTER the agent finished. */
   finalTests: { exitCode: number; output: string };
+  /** Every tool dispatch with its validated I/O, in order — lets checks assert real data flow. */
+  toolEvents: ToolResultEvent[];
 }
 
 export interface EvalTask {
@@ -74,6 +77,7 @@ export async function runEval(task: EvalTask, opts: RunEvalOptions): Promise<Eva
   const logger = silentLogger();
   const tracer = new Tracer({ filePath: join(workspace, ".maestro/trace.jsonl") });
 
+  const toolEvents: ToolResultEvent[] = [];
   const result = await runTask({
     goal: task.goal,
     workspace,
@@ -81,12 +85,13 @@ export async function runEval(task: EvalTask, opts: RunEvalOptions): Promise<Eva
     provider: opts.provider,
     logger,
     tracer,
+    onToolResult: (rec) => toolEvents.push(rec),
   });
 
   const finalRun = await runCommand("npm", ["test", "--silent"], { cwd: workspace, timeoutMs: 60_000 });
   const finalTests = { exitCode: finalRun.exitCode, output: (finalRun.stdout + finalRun.stderr).slice(-2000) };
 
-  const scoreCtx: ScoreContext = { workspace, result, finalTests };
+  const scoreCtx: ScoreContext = { workspace, result, finalTests, toolEvents };
   const checkResults = [];
   for (const check of task.checks) {
     let passed = false;
@@ -138,12 +143,15 @@ export const checks = {
   }),
   composedChain: (): Check => ({
     name: "composed_run_tests_to_localize",
-    description: "code.localize_failure was called after shell.run_tests (typed output consumed by a downstream tool).",
+    description: "code.localize_failure consumed the ACTUAL structured output of shell.run_tests (verified by matching the data, not just call order).",
     evaluate: (c) => {
-      const seq = c.result.toolCalls.map((t) => t.name);
-      const ti = seq.indexOf("shell.run_tests");
-      const li = seq.indexOf("code.localize_failure");
-      return ti >= 0 && li > ti;
+      const runTests = c.toolEvents.find((e) => e.name === "shell.run_tests" && e.ok);
+      const localize = c.toolEvents.find((e) => e.name === "code.localize_failure" && e.ok);
+      if (!runTests || !localize) return false;
+      const out = runTests.output as { failed?: number } | undefined;
+      const inp = localize.input as { testRun?: { failed?: number } } | undefined;
+      // The localized run's failure count must equal the test run's — i.e. the SAME object flowed through.
+      return !!out && !!inp?.testRun && out.failed === inp.testRun.failed && (out.failed ?? 0) > 0;
     },
   }),
   survivedCompaction: (): Check => ({

@@ -28,6 +28,8 @@ export interface TaskOptions {
   /** Seed the plan deterministically (used by eval/replay). Normally the model plans. */
   seedPlan?: string[];
   onStep?: (records: import("./loop.js").ToolCallRecord[]) => void;
+  /** Observe every tool dispatch (validated I/O) — used by the eval harness to assert data flow. */
+  onToolResult?: import("../tools/types.js").ToolServices["onToolResult"];
 }
 
 export interface TaskResult extends AgentRunResult {
@@ -72,11 +74,13 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     web: { ratePerSec: opts.config.rateLimits.webPerSec, burst: 6 },
   });
 
+  const rateLimiter = (resource: string) => limiterRegistry.for(resource);
   const services: ToolServices = {
-    spawnSubagent: makeSpawner({ provider, registry, workspace, logger, tracer }),
-    rateLimiter: (resource: string) => limiterRegistry.for(resource),
+    spawnSubagent: makeSpawner({ provider, registry, workspace, logger, tracer, rateLimiter }),
+    rateLimiter,
     ledger,
     registryView: { names: () => registry.names(), namespaces: () => registry.namespaces() },
+    onToolResult: opts.onToolResult,
   };
 
   const budgets: Budgets = {

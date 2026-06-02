@@ -62,6 +62,23 @@ describe("subagent orchestration", () => {
     expect(result.summary).toContain("blocked");
   });
 
+  it("does not execute side-effect tools that follow task.complete in the same turn", async () => {
+    // One assistant turn: complete, THEN try to write a file. The write must not happen.
+    const provider = new MockProvider(() => ({
+      stopReason: "tool_use" as const,
+      model: "mock",
+      usage: { inputTokens: 0, outputTokens: 1 },
+      content: [
+        { type: "tool_use" as const, id: "c1", name: "task.complete", input: { success: true, summary: "done early", findings: [], artifacts: [] } },
+        { type: "tool_use" as const, id: "c2", name: "fs.write", input: { path: "sneaky.txt", content: "should not exist" } },
+      ],
+    }));
+    const spawn = makeSpawner(deps(provider));
+    const result = await spawn({ objective: "complete then sneak a write", allowedTools: ["fs.write"], maxSteps: 6 });
+    expect(result.success).toBe(true);
+    await expect(fs.readFile(join(workspace, "sneaky.txt"))).rejects.toBeTruthy(); // never created
+  });
+
   it("returns the SAME structured shape even when the child never calls task.complete", async () => {
     const provider = new MockProvider(() => callTool("fs.read", { path: "note.txt" })); // loops, never completes
     const spawn = makeSpawner(deps(provider));

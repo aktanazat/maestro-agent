@@ -24,10 +24,16 @@ afterEach(async () => {
 });
 
 describe("path sandbox", () => {
-  it("permits paths inside the workspace and rejects escapes", () => {
+  it("permits paths inside the workspace and rejects lexical escapes", () => {
     expect(resolveInside("/work", "src/a.ts")).toBe("/work/src/a.ts");
     expect(() => resolveInside("/work", "../etc/passwd")).toThrow(SandboxViolationError);
     expect(() => resolveInside("/work", "/etc/passwd")).toThrow(SandboxViolationError);
+  });
+
+  it("rejects escapes through a symlink that points outside the workspace", async () => {
+    // A symlinked dir inside the repo that points to the real /tmp root (outside workspace).
+    await fs.symlink("/tmp", join(workspace, "escape"), "dir").catch(() => {});
+    expect(() => resolveInside(workspace, "escape/secret.txt")).toThrow(SandboxViolationError);
   });
 });
 

@@ -183,19 +183,23 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
         steps += 1;
         const t0 = Date.now();
 
-        // Completion tool short-circuits: validate its input and end the run.
+        // Completion tool truly short-circuits: validate its input, end the run, and do NOT
+        // execute any later tools in the same assistant turn (they'd be side effects past the
+        // declared end of work). On success we break; the post-loop backfill answers the rest.
         if (config.completionTool && use.name === config.completionTool.name) {
           try {
             structured = await registry.execute(use.name, use.input, toolCtx);
             results.push({ type: "tool_result", tool_use_id: use.id, content: "ok", is_error: false });
             stepRecords.push({ step: steps, name: use.name, ok: true, durationMs: Date.now() - t0 });
             completed = true;
+            break;
           } catch (err) {
             const me = asMaestroError(err);
+            // Invalid structured return: surface the error and let the model retry the call.
             results.push({ type: "tool_result", tool_use_id: use.id, content: toolErrorText(me), is_error: true });
             stepRecords.push({ step: steps, name: use.name, ok: false, durationMs: Date.now() - t0, errorCode: me.code });
+            continue;
           }
-          continue;
         }
 
         try {

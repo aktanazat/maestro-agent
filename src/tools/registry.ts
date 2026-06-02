@@ -149,14 +149,17 @@ export class ToolRegistry {
       if (!parsedOutput.success) {
         throw new ToolOutputError(name, parsedOutput.error.issues.map((i) => i.message).join("; "));
       }
-      span.setAttribute("durationMs", Date.now() - t0);
+      const durationMs = Date.now() - t0;
+      span.setAttribute("durationMs", durationMs);
       span.end("ok");
+      ctx.services.onToolResult?.({ name, input: parsedInput.data, output: parsedOutput.data, ok: true, durationMs });
       return parsedOutput.data;
     } catch (err) {
       const me = asMaestroError(err, "TOOL_EXECUTION_FAILED");
       span.setAttribute("error", me.code);
       span.addEvent("tool_error", { code: me.code, message: me.message });
       span.end("error");
+      ctx.services.onToolResult?.({ name, input: parsedInput.data, ok: false, durationMs: Date.now() - t0, errorCode: me.code });
       throw me;
     }
   }

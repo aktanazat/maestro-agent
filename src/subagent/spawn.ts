@@ -32,6 +32,8 @@ export interface SpawnDeps {
   logger: Logger;
   tracer: Tracer;
   parentSpan?: Span;
+  /** Shared rate limiter factory — inherited so child external calls are throttled too. */
+  rateLimiter?: (resource: string) => { acquire: () => Promise<void> };
   /** Maximum nesting depth to prevent runaway recursion. */
   maxDepth?: number;
   depth?: number;
@@ -92,10 +94,14 @@ export function makeSpawner(deps: SpawnDeps) {
     });
     context.pushUser([{ type: "text", text: `Objective:\n${req.objective}` }]);
 
-    // Child can spawn its own subagents only if granted; bind a deeper spawner.
+    // The child is a first-class agent: it inherits the same production services the parent
+    // gets — rate limiting on external calls, a writable ledger for its own plan/facts, and a
+    // discovery view of its scoped registry. Only its world (toolset, context) is narrower.
     const childServices: ToolServices = {
       spawnSubagent: makeSpawner({ ...deps, parentSpan: span, depth: depth + 1 }),
-      rateLimiter: undefined,
+      rateLimiter: deps.rateLimiter,
+      ledger,
+      registryView: { names: () => scoped.names(), namespaces: () => scoped.namespaces() },
     };
 
     const result = await runAgent({

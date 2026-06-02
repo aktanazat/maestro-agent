@@ -1,0 +1,22 @@
+**Top 5 Issues**
+
+1. **Malformed Anthropic tool stream on mid-batch budget stop.**  
+[src/agent/loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:182) increments `steps` per tool and breaks at [line 214](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:214), but the assistant message may contain more `tool_use` blocks than `tool_result`s pushed at [line 219](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:219). [src/llm/anthropic.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/llm/anthropic.ts:107) forwards that stream directly. Anthropic will reject this shape. I reproduced it: two tool calls, `maxSteps: 1`, context ends with results only for `tool_use_id: "a"`, leaving `"b"` orphaned. Balagan.
+
+2. **`task.complete` does not actually short-circuit.**  
+[src/agent/loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:186) says completion short-circuits, but [line 198](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:198) only `continue`s the loop over the remaining tool calls. Later write/exec tools in same assistant response still run at [line 201](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:201). I reproduced this with `task.complete` followed by a side-effect tool: run status was completed, structured return set, and side effect still executed. That violates the subagent boundary contract.
+
+3. **Subagent production scaffolding is not inherited.**  
+[src/subagent/spawn.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:96) creates `childServices` with `rateLimiter: undefined`. But external tools rely on optional service calls: [src/tools/web/index.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/web/index.ts:21), [src/tools/gh/index.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/gh/index.ts:14). So child `web.*`/`github.*` calls are not rate-limited, despite README/code claims. Also child has a `Ledger` at [spawn.ts:84](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:84), but `plan.*` tools cannot mutate it because `ledger` is not passed in services. Own ledger is mostly decorative.
+
+4. **Workspace sandbox is lexical only; symlinks bypass it.**  
+[src/util/paths.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/util/paths.ts:9) uses `resolve`/`relative`, not `realpath`. Then [fs.read](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/fs/index.ts:28), [fs.write](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/fs/index.ts:68), [fs.edit](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/fs/index.ts:87), and delete/copy/move follow filesystem symlinks. A repo containing `link -> /outside/file` lets a scoped subagent with `fs.read` or `fs.write` operate outside workspace. The comment “sandbox boundary” at [paths.ts:6](/Users/aktanazat/Documents/projects/personal/maestro/src/util/paths.ts:6) is not backed by code.
+
+5. **Eval harness proves scripted behavior, not autonomous model behavior.**  
+[src/eval/solver.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:32) hardcodes the entire fixture plan, exact files, exact edits, commit message, and subagent behavior. The subagent policy at [line 126](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/solver.ts:126) is also scripted. The composability check at [src/eval/harness.ts:139](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/harness.ts:139) only checks call order, not that `code.localize_failure` consumed the actual `shell.run_tests` output meaningfully. This is checkbox-real for plumbing, not evidence of model-driven long-horizon competence.
+
+**Verdict**
+
+Subagent is **REAL, but thin and leaky**. Not just function relabelled: [makeSpawner](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:58) creates a fresh `ConversationContext`, fresh `Ledger`, scoped registry subset, separate budget, child span, and schema-return `task.complete`. That is real orchestration in code.
+
+But isolation is not hard enough: service wiring skips rate limits/ledger, completion can be followed by side effects, and filesystem scope can be escaped by symlink. So answer is: real subagent, not fake, but senior reviewer can still call it under-hardened.

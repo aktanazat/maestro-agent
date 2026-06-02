@@ -28,6 +28,17 @@ export interface ToolServices {
   ledger?: LedgerHandle;
   /** Read-only registry view (names + namespaces) for the `agent.list_tools` discovery tool. */
   registryView?: { names: () => string[]; namespaces: () => string[] };
+  /** Observability hook fired after every tool dispatch with its validated I/O. */
+  onToolResult?: (rec: ToolResultEvent) => void;
+}
+
+export interface ToolResultEvent {
+  name: string;
+  input: unknown;
+  output?: unknown;
+  ok: boolean;
+  durationMs: number;
+  errorCode?: string;
 }
 
 /** Structural view of the Ledger so tools need not import the agent layer (avoids cycles). */
