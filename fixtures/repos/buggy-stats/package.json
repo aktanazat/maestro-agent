@@ -1,0 +1,10 @@
+{
+  "name": "buggy-stats",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixture repo with two seeded bugs and a zero-dependency test runner.",
+  "scripts": {
+    "test": "node test/run.mjs"
+  }
+}

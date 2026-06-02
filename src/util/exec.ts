@@ -33,7 +33,7 @@ export async function runCommand(file: string, args: string[], opts: RunOptions)
     const result = await execa(file, args, {
       cwd: opts.cwd,
       timeout: timeoutMs,
-      signal: opts.signal,
+      cancelSignal: opts.signal,
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
       reject: false,
       all: false,

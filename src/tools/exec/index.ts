@@ -52,7 +52,7 @@ function parseTestOutput(_runner: string, stdout: string, stderr: string): { pas
     // vitest/jest: "FAIL  src/foo.test.ts > suite > case" or "× case"
     const failMatch = /^\s*(?:FAIL|×|✗|✕)\s+(.+?)(?:\s+\d+ms)?$/.exec(line) || /^\s*(.+?\.(?:test|spec)\.[tj]sx?)\s*>\s*(.+)$/.exec(line);
     if (failMatch) {
-      const located = /([\w./-]+\.(?:test|spec|py)\.?[tj]?s?x?):?(\d+)?/.exec(line);
+      const located = /([\w./-]+\.(?:test|spec)\.\w+|[\w./-]+\.py):?(\d+)?/.exec(line);
       const message = (lines[i + 1] ?? "").trim() || line.trim();
       failures.push({
         test: failMatch[2] ?? failMatch[1] ?? line.trim(),

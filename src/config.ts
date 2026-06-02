@@ -13,21 +13,27 @@ export const ConfigSchema = z.object({
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
   logPretty: z.boolean().default(true),
   tracesDir: z.string().default(".maestro/traces"),
-  budgets: z.object({
-    maxSteps: z.number().int().positive().default(60),
-    maxTokens: z.number().int().positive().default(400_000),
-    maxWallClockMs: z.number().int().positive().default(15 * 60_000),
-  }),
-  context: z.object({
-    maxContextTokens: z.number().int().positive().default(150_000),
-    compactionThreshold: z.number().min(0.1).max(0.95).default(0.7),
-    recencyKeep: z.number().int().positive().default(8),
-  }),
-  rateLimits: z.object({
-    anthropicPerSec: z.number().positive().default(4),
-    githubPerSec: z.number().positive().default(2),
-    webPerSec: z.number().positive().default(3),
-  }),
+  budgets: z
+    .object({
+      maxSteps: z.number().int().positive().default(60),
+      maxTokens: z.number().int().positive().default(400_000),
+      maxWallClockMs: z.number().int().positive().default(15 * 60_000),
+    })
+    .default({}),
+  context: z
+    .object({
+      maxContextTokens: z.number().int().positive().default(150_000),
+      compactionThreshold: z.number().min(0.1).max(0.95).default(0.7),
+      recencyKeep: z.number().int().positive().default(8),
+    })
+    .default({}),
+  rateLimits: z
+    .object({
+      anthropicPerSec: z.number().positive().default(4),
+      githubPerSec: z.number().positive().default(2),
+      webPerSec: z.number().positive().default(3),
+    })
+    .default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
