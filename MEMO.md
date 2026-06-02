@@ -1,4 +1,4 @@
-# MEMO — maestro
+# MEMO: maestro
 
 ## What I built
 
