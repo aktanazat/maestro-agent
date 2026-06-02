@@ -5,6 +5,12 @@ the failing tests pass" or "add feature X", and it plans, edits, runs the tests,
 until the goal is verifiably met. The model decides what to do. The runtime gives it a coherent
 toolset, isolated subagents, durable working memory, and production guardrails.
 
+![maestro demo](demo/maestro-demo.gif)
+
+> A 90-second tour: the 60-tool registry, the eval fixing seeded bugs in real git repos, the
+> subagent and compaction internals, and the live-API bug the deterministic mock missed. Source
+> tape: [`demo/maestro-demo.tape`](demo/maestro-demo.tape), rendered with VHS.
+
 ```
 maestro run "the test suite is failing; find the root cause, fix it, and commit" --repo ./some-project
 maestro eval            # deterministic eval suite (no API key needed)

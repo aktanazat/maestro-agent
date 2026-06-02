@@ -1,0 +1,8 @@
+
+
+   [1;36mmaestro[0m
+
+   [2man autonomous software-engineering agent[0m
+
+   [2mgive it a repo and a goal. it plans, edits, runs tests, ships a verified fix.[0m
+

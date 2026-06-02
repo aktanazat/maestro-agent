@@ -1,0 +1,8 @@
+
+
+   [1;36mmaestro[0m
+
+   [2m60 tools  ·  isolated subagents  ·  ledger-backed compaction  ·  production scaffolding[0m
+
+   [1;2mgithub.com/aktanazat/maestro-agent[0m
+
