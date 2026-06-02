@@ -12,9 +12,15 @@ the problem pushes everyone toward them:
 
 - **Durable state that survives crashes and compaction.** CCX has the mission log; maestro has an
   append-only mission log (`src/agent/mission-log.ts`) that checkpoints the ledger snapshot plus
-  the message window every step. `maestro resume <id>` rebuilds a killed run in a fresh process
-  from the last checkpoint and finishes it. Proven by an eval: abort at tool 14 (tests red),
-  resume, finish green. It continues from the checkpoint; it does not re-plan.
+  the message window after every tool. `maestro resume <id>` rebuilds a killed run in a fresh
+  process from the last checkpoint and finishes it. Proven two ways: an in-process eval (abort at
+  tool 14, resume, finish green, continues from the checkpoint rather than re-planning), and a test
+  that spawns a **separate OS process** which resumes from the on-disk log alone
+  (`tests/integration/resume-process.test.ts`). Semantics are honest at-least-once: resume restarts
+  from the last complete checkpoint, and `restore()` repairs any tool_use a crash left unanswered,
+  so tools should be (and are) replay-safe: `fs.edit` errors if its `oldString` is gone,
+  `git.commit_all` errors on nothing-to-commit. Exactly-once across a crash would need 2-phase
+  commit, which I did not claim.
 - **Acceptance as a verifier, not a prompt.** CCX has the 8-point gate; maestro has an acceptance
   gate (`src/agent/gate.ts`) the loop runs itself before it will accept "done": tests pass, build
   passes, the tree is committed, the plan is closed. A red gate is fed back and the run continues.
@@ -41,10 +47,12 @@ the problem pushes everyone toward them:
 
 - **No completed live-model run.** The Anthropic path is wired and verified to the point the API
   accepts the request (I drove it with a Claude Code OAuth token and fixed two real wire-format
-  bugs the mock never caught: dotted tool names, draft-2020-12 schemas). A full autonomous run was
-  blocked by the subscription's burst rate limit; a pay-per-token key removes it. So the
-  deterministic eval proves runtime **invariants** (gate, resume, compaction, composition), not
-  live-model competence. I did not oversell that.
+  bugs the mock never caught: dotted tool names, draft-2020-12 schemas. The actual API responses
+  are in `docs/reviews/live-integration-evidence.md`, a 400→400→429 progression). A full autonomous
+  run was blocked by the subscription's burst rate limit; a pay-per-token key removes it
+  (`npm run eval -- --real`). So the deterministic eval proves runtime **invariants** (gate, resume,
+  compaction, composition), and the evidence proves the **live wire**; the one thing not captured is
+  a full autonomous run on the real model. I did not oversell that.
 - **One domain, scripted solver.** The eval drives the real loop/registry/subagent/gate/mission-log
   through a deterministic mock provider. That is strong proof of the machinery, weak proof of model
   autonomy. A held-out, multi-domain, real-model benchmark is the next thing I would build.
