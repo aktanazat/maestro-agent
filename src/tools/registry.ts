@@ -171,6 +171,9 @@ export class ToolRegistry {
       span.setAttribute("error", me.code);
       span.addEvent("tool_error", { code: me.code, message: me.message });
       span.end("error");
+      // A failed or timed-out write/exec may still have partially mutated the tree, so the cache
+      // must be dropped on the error path too — not only on success.
+      if (tool.effect === "write" || tool.effect === "exec") ctx.services.projectIndex?.invalidate();
       ctx.services.onToolResult?.({ name, input: parsedInput.data, ok: false, durationMs: Date.now() - t0, errorCode: me.code });
       throw me;
     }

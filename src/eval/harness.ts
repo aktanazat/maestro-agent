@@ -149,9 +149,10 @@ export const checks = {
       const localize = c.toolEvents.find((e) => e.name === "code.localize_failure" && e.ok);
       if (!runTests || !localize) return false;
       const out = runTests.output as { failed?: number } | undefined;
-      const inp = localize.input as { testRun?: { failed?: number } } | undefined;
-      // The localized run's failure count must equal the test run's — i.e. the SAME object flowed through.
-      return !!out && !!inp?.testRun && out.failed === inp.testRun.failed && (out.failed ?? 0) > 0;
+      const inp = (localize.input as { testRun?: unknown } | undefined)?.testRun;
+      // Strong proof: the ENTIRE structured TestRunResult emitted by run_tests must be byte-for-byte
+      // the object localize_failure received. Not just a matching count — the same payload flowed.
+      return !!out && !!inp && JSON.stringify(out) === JSON.stringify(inp) && (out.failed ?? 0) > 0;
     },
   }),
   survivedCompaction: (): Check => ({

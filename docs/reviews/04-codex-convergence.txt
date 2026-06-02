@@ -1,0 +1,21 @@
+Walla, current `src/` is mostly fixed. Two are still half-done.
+
+**Code Grill**
+1. **FIXED** malformed tool stream: every `tool_use` gets backfilled with `tool_result` after mid-batch stop. [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:236)
+2. **FIXED** `task.complete` short-circuits: validates completion, sets `completed`, breaks before later tools execute. [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:201)
+3. **FIXED** subagent services: child gets `rateLimiter`, own `ledger`, shared `projectIndex`, inherited `checkPermission`. [spawn.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:104)
+4. **FIXED** symlink sandbox: containment now checks realpath of deepest existing ancestor. [paths.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/util/paths.ts:16)
+5. **NOT** eval data-flow: it no longer checks only order, but still only compares `failed` count. That does not prove `code.localize_failure` consumed actual `shell.run_tests` output. [harness.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/eval/harness.ts:148)
+
+**Improvement Grill**
+A. **FIXED, with staleness bug** per-run index exists and code tools use it. [runner.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/runner.ts:79), [code/index.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/code/index.ts:17)  
+B. **NOT fully** completion guard nudges only twice, then still returns `completed` with incomplete plan. No infinite loop, but not hard guard. [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:168), [loop.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/loop.ts:181)  
+C. **FIXED structurally** risk exists, registry enforces policy, runner wires it, subagents inherit it. [types.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/types.ts:104), [registry.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/registry.ts:138), [runner.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/agent/runner.ts:125), [spawn.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/subagent/spawn.ts:109)
+
+**Ranked Remaining Issues**
+1. Eval composed-chain check is weak. Same failed count can fake it. Needs compare full structured payload or event linkage.
+2. Project index invalidates only after successful write/exec. Failed/timeout exec can mutate tree and leave cache stale. [registry.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/registry.ts:164)
+3. “Safe” permission mode allows externally mutating GitHub tools because network defaults `medium`; `github.issue_create` / `github.pr_create` are not high risk. [gh/index.ts](/Users/aktanazat/Documents/projects/personal/maestro/src/tools/gh/index.ts:86)
+4. Nudge is bounded, so no infinite loop, but incomplete plan can still finish as `completed`.
+
+Verification: `npm run typecheck` passes. Unit tests could not run in this read-only sandbox; Vitest tried writing temp files under `node_modules/.vite-temp` / `/tmp/claude-501`.

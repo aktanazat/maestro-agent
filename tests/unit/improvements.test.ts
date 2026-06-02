@@ -61,6 +61,16 @@ describe("permission policy", () => {
   it("auto mode allows everything", () => {
     expect(permissionPolicy("auto")).toBeUndefined();
   });
+
+  it("tags genuinely destructive/external tools as high risk so safe mode blocks them", async () => {
+    const { buildRegistry } = await import("../../src/tools/index.js");
+    const reg = buildRegistry();
+    for (const name of ["fs.delete", "git.reset", "github.issue_create", "github.pr_create"]) {
+      expect(reg.get(name).risk).toBe("high");
+    }
+    // A read tool stays low.
+    expect(reg.get("fs.read").risk).toBe("low");
+  });
 });
 
 describe("ProjectIndex", () => {

@@ -89,6 +89,7 @@ const issueCreate = defineTool({
   input: z.object({ title: z.string().min(1), body: z.string().default("") }),
   output: z.object({ url: z.string() }),
   effect: "network",
+  risk: "high",
   idempotent: false,
   handler: async (input, ctx) => {
     const out = (await gh(ctx, ["issue", "create", "--title", input.title, "--body", input.body])) as string;
@@ -119,6 +120,7 @@ const prCreate = defineTool({
   input: z.object({ title: z.string().min(1), body: z.string().default(""), base: z.string().default("main") }),
   output: z.object({ url: z.string() }),
   effect: "network",
+  risk: "high",
   idempotent: false,
   handler: async (input, ctx) => {
     const out = (await gh(ctx, ["pr", "create", "--title", input.title, "--body", input.body, "--base", input.base])) as string;
