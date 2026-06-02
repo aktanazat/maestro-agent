@@ -141,6 +141,7 @@ export function makeProvider(config: Config, logger: Logger): ModelProvider {
   }
   return new AnthropicProvider({
     apiKey: config.anthropicApiKey,
+    authToken: config.anthropicAuthToken,
     model: config.model,
     logger,
     ratePerSec: config.rateLimits.anthropicPerSec,

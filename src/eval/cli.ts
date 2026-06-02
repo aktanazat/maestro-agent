@@ -18,8 +18,14 @@ export async function main(argv: string[]): Promise<void> {
 
   const reports: EvalReport[] = [];
   for (const task of tasks) {
+    const cfg = loadConfig();
     const provider = real
-      ? new AnthropicProvider({ model: loadConfig().model, logger: createLogger({ level: "warn" }) })
+      ? new AnthropicProvider({
+          apiKey: cfg.anthropicApiKey,
+          authToken: cfg.anthropicAuthToken,
+          model: cfg.model,
+          logger: createLogger({ level: "warn" }),
+        })
       : new MockProvider(buggyStatsSolver());
     const config = real ? loadConfig() : loadConfig({ provider: "mock" });
     process.stdout.write(`\n▶ ${task.id}${real ? " (real model)" : " (mock solver)"}\n`);

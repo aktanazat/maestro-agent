@@ -105,6 +105,30 @@ describe("ProjectIndex", () => {
   });
 });
 
+describe("Anthropic wire-format compatibility (regressions found by the live API)", () => {
+  it("generated tool schemas use numeric exclusiveMinimum, never the boolean (draft-07/2020-12) form", async () => {
+    const { buildRegistry } = await import("../../src/tools/index.js");
+    const specs = buildRegistry().toolSpecs();
+    for (const s of specs) {
+      const json = JSON.stringify(s.input_schema);
+      // The openApi3 target emitted `"exclusiveMinimum":true`, which the live API rejects with a 400.
+      expect(json).not.toContain('"exclusiveMinimum":true');
+      expect(json).not.toContain('"exclusiveMaximum":true');
+    }
+  });
+
+  it("encodes dotted tool names to the API-safe pattern and round-trips back", async () => {
+    const { toApiName, fromApiName } = await import("../../src/llm/anthropic.js");
+    const { buildRegistry } = await import("../../src/tools/index.js");
+    const apiPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+    for (const name of buildRegistry().names()) {
+      const api = toApiName(name);
+      expect(api).toMatch(apiPattern); // the API rejects dots
+      expect(fromApiName(api)).toBe(name); // lossless round-trip
+    }
+  });
+});
+
 describe("parseTestOutput corpus", () => {
   it("parses vitest summary + failures", () => {
     const out = "× src/foo.test.ts > adds numbers\n  expected 3 but got 4\nTests  1 failed | 4 passed (5)";

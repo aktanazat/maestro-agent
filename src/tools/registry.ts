@@ -113,7 +113,11 @@ export class ToolRegistry {
     return this.list().map((t) => {
       const cached = this.specCache.get(t.name);
       if (cached) return cached;
-      const json = zodToJsonSchema(t.input, { target: "openApi3", $refStrategy: "none" }) as Record<string, unknown>;
+      // Default target emits JSON Schema draft-07 (numeric `exclusiveMinimum`), which the
+      // Anthropic tool API accepts as draft 2020-12. The openApi3 target does NOT: it emits the
+      // boolean `exclusiveMinimum` form, which the live API rejects with a 400. (Caught only by
+      // hitting the real endpoint — the mock provider never validates schemas.)
+      const json = zodToJsonSchema(t.input, { $refStrategy: "none" }) as Record<string, unknown>;
       // Anthropic wants a plain object schema at the top level.
       delete json.$schema;
       const spec: ToolSpec = {

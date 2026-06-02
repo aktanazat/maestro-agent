@@ -10,6 +10,8 @@ export const ConfigSchema = z.object({
   provider: z.enum(["anthropic", "mock"]).default("anthropic"),
   model: z.string().default("claude-sonnet-4-6"),
   anthropicApiKey: z.string().optional(),
+  /** OAuth bearer token (Claude Code subscription). Used when no API key is set. */
+  anthropicAuthToken: z.string().optional(),
   /** auto = allow all; readonly = block write/exec/network; safe = block high-risk tools. */
   permissionMode: z.enum(["auto", "readonly", "safe"]).default("auto"),
   logLevel: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -46,6 +48,7 @@ export function loadConfig(overrides: Partial<Record<string, unknown>> = {}): Co
     provider: env.MAESTRO_PROVIDER ?? overrides.provider,
     model: env.MAESTRO_MODEL ?? overrides.model,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
+    anthropicAuthToken: env.ANTHROPIC_AUTH_TOKEN,
     permissionMode: env.MAESTRO_PERMISSION_MODE ?? overrides.permissionMode,
     logLevel: env.MAESTRO_LOG_LEVEL,
     logPretty: env.MAESTRO_LOG_PRETTY ? env.MAESTRO_LOG_PRETTY === "1" : undefined,

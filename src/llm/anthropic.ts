@@ -18,6 +18,8 @@ import type { Logger } from "../obs/logger.js";
 
 export interface AnthropicProviderOptions {
   apiKey?: string;
+  /** OAuth bearer token (e.g. a Claude Code subscription token). Used if no apiKey is given. */
+  authToken?: string;
   model?: string;
   maxRetries?: number;
   logger?: Logger;
@@ -27,6 +29,17 @@ export interface AnthropicProviderOptions {
 }
 
 const DEFAULT_MODEL = "claude-sonnet-4-6";
+
+// OAuth (subscription) tokens authenticate as Claude Code: the request must carry the oauth
+// beta header and the system prompt must begin with this identity line, or the API rejects it.
+const OAUTH_BETA = "oauth-2025-04-20";
+const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+// The Anthropic API restricts tool names to ^[a-zA-Z0-9_-]+$ — no dots. maestro names tools
+// `<namespace>.<verb>` for a coherent registry, so we encode the dot on the wire and decode it
+// back on the model's tool_use blocks. The registry only ever sees the dotted names.
+export const toApiName = (n: string): string => n.replace(".", "__");
+export const fromApiName = (n: string): string => n.replace("__", ".");
 
 /**
  * Real provider. Wraps the Anthropic Messages API and is the place where all the
@@ -41,12 +54,18 @@ export class AnthropicProvider implements ModelProvider {
   private readonly limiter: RateLimiter;
   private readonly maxRetries: number;
   private readonly logger?: Logger;
+  private readonly oauth: boolean;
 
   constructor(opts: AnthropicProviderOptions = {}) {
     const apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new ModelError("ANTHROPIC_API_KEY not set", { retryable: false });
+    const authToken = opts.authToken ?? process.env.ANTHROPIC_AUTH_TOKEN;
+    if (!apiKey && !authToken) throw new ModelError("set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN", { retryable: false });
     this.model = opts.model ?? process.env.MAESTRO_MODEL ?? DEFAULT_MODEL;
-    this.client = new Anthropic({ apiKey, maxRetries: 0 }); // we own retries
+    this.oauth = !apiKey && !!authToken;
+    // We own retries (maxRetries: 0). OAuth mode authenticates via Bearer + the oauth beta header.
+    this.client = this.oauth
+      ? new Anthropic({ authToken, defaultHeaders: { "anthropic-beta": OAUTH_BETA }, maxRetries: 0 })
+      : new Anthropic({ apiKey, maxRetries: 0 });
     this.limiter = new RateLimiter({
       ratePerSec: opts.ratePerSec ?? 4,
       burst: opts.burst ?? 8,
@@ -70,9 +89,9 @@ export class AnthropicProvider implements ModelProvider {
               model: this.model,
               max_tokens: req.maxTokens,
               temperature: req.temperature ?? 1,
-              system: req.system,
+              system: this.oauth ? `${CLAUDE_CODE_IDENTITY}\n\n${req.system}` : req.system,
               tools: req.tools.map((t) => ({
-                name: t.name,
+                name: toApiName(t.name),
                 description: t.description,
                 input_schema: t.input_schema as Anthropic.Tool.InputSchema,
               })),
@@ -101,7 +120,7 @@ function mapToolChoice(choice: ModelRequest["toolChoice"]): Anthropic.MessageCre
   if (!choice || choice.type === "auto") return { type: "auto" };
   if (choice.type === "any") return { type: "any" };
   if (choice.type === "none") return { type: "auto" }; // SDK lacks "none"; emulate by not forcing
-  return { type: "tool", name: choice.name };
+  return { type: "tool", name: toApiName(choice.name) };
 }
 
 function mapMessageOut(m: ModelMessage): Anthropic.MessageParam {
@@ -109,7 +128,7 @@ function mapMessageOut(m: ModelMessage): Anthropic.MessageParam {
     role: m.role,
     content: m.content.map((b): Anthropic.ContentBlockParam => {
       if (b.type === "text") return { type: "text", text: b.text };
-      if (b.type === "tool_use") return { type: "tool_use", id: b.id, name: b.name, input: b.input as Record<string, unknown> };
+      if (b.type === "tool_use") return { type: "tool_use", id: b.id, name: toApiName(b.name), input: b.input as Record<string, unknown> };
       return {
         type: "tool_result",
         tool_use_id: b.tool_use_id,
@@ -124,7 +143,7 @@ function mapResponse(res: Anthropic.Message): ModelResponse {
   const content: Array<TextBlock | ToolUseBlock> = [];
   for (const block of res.content) {
     if (block.type === "text") content.push({ type: "text", text: block.text });
-    else if (block.type === "tool_use") content.push({ type: "tool_use", id: block.id, name: block.name, input: block.input });
+    else if (block.type === "tool_use") content.push({ type: "tool_use", id: block.id, name: fromApiName(block.name), input: block.input });
   }
   return {
     stopReason: mapStopReason(res.stop_reason),
