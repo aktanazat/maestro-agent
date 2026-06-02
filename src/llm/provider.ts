@@ -1,0 +1,92 @@
+import type { ToolSpec } from "../tools/registry.js";
+
+/**
+ * Provider-agnostic message shape. Modeled on Anthropic's content-block protocol
+ * (the richest of the common ones) so the mapping to the real API is lossless, while
+ * staying decoupled enough that a deterministic MockProvider can satisfy the same
+ * contract for tests and the eval harness — no API key, no spend, fully reproducible.
+ */
+export type Role = "user" | "assistant";
+
+export interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+export interface ToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock;
+
+export interface ModelMessage {
+  role: Role;
+  content: ContentBlock[];
+}
+
+export type StopReason = "end_turn" | "tool_use" | "max_tokens" | "stop_sequence";
+
+export interface ModelRequest {
+  system: string;
+  messages: ModelMessage[];
+  tools: ToolSpec[];
+  maxTokens: number;
+  temperature?: number;
+  /** Force a tool call, force none, or let the model decide (default). */
+  toolChoice?: { type: "auto" } | { type: "any" } | { type: "tool"; name: string } | { type: "none" };
+}
+
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface ModelResponse {
+  stopReason: StopReason;
+  /** Only output blocks the model can emit: text and tool_use. */
+  content: Array<TextBlock | ToolUseBlock>;
+  usage: Usage;
+  model: string;
+}
+
+export interface CompleteOptions {
+  signal?: AbortSignal;
+  /** Opaque label for tracing which loop/subagent made the call. */
+  caller?: string;
+}
+
+export interface ModelProvider {
+  readonly name: string;
+  readonly model: string;
+  complete(req: ModelRequest, opts?: CompleteOptions): Promise<ModelResponse>;
+  /** Cheap token estimate for context budgeting. Need not be exact. */
+  estimateTokens(text: string): number;
+}
+
+/** Rough token estimate (~4 chars/token). Good enough for budget thresholds. */
+export function estimateTokensFromText(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/** Estimate tokens for a whole message list — used by the context manager. */
+export function estimateMessageTokens(messages: ModelMessage[]): number {
+  let total = 0;
+  for (const m of messages) {
+    for (const block of m.content) {
+      if (block.type === "text") total += estimateTokensFromText(block.text);
+      else if (block.type === "tool_use") total += estimateTokensFromText(JSON.stringify(block.input)) + 8;
+      else if (block.type === "tool_result") total += estimateTokensFromText(block.content) + 8;
+    }
+  }
+  return total;
+}
