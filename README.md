@@ -9,7 +9,7 @@ toolset, isolated subagents, durable working memory, and production guardrails.
 
 > Watch the agent autonomously fix a failing repo: it plans 13 steps, runs the tests, composes
 > `run_tests` into `localize_failure`, delegates an audit to an isolated subagent, survives a
-> context compaction mid-run, patches both bugs, re-verifies green, and commits — 27 tool calls,
+> context compaction mid-run, patches both bugs, re-verifies green, and commits. 27 tool calls,
 > plan coherent throughout. Deterministic and reproducible: [`demo/agent-run.ts`](demo/agent-run.ts)
 > drives the real agent via the mock provider (no API key). There's also a
 > [code tour](demo/maestro-demo.gif) of the registry, subagent, and compaction internals.
@@ -30,7 +30,7 @@ else is structure that keeps a long autonomous run correct.
 | **Tool registry** | `src/tools/registry.ts` | 60 tools across 8 namespaces are self-describing `Tool<I,O>` values in a `Map`. Anthropic JSON schemas are generated from zod. Dispatch is one validated code path, so there is no `switch (toolName)` to grow. |
 | **Subagent orchestration** | `src/subagent/spawn.ts` | `agent.spawn` runs the same loop with an isolated context, a registry subset scoped to the granted tools, its own budget and trace span, and a schema-validated return. The parent sees only that return, never the child's transcript. |
 | **Long-horizon execution** | `src/agent/ledger.ts`, `src/agent/context.ts` | A durable plan ledger holds the plan, established facts, and file digests. It is re-rendered into the system prompt on every call, so it outlives the compaction that summarizes stale tool output away. Plan coherence lives in code, not in a prompt instruction. |
-| **Acceptance gate** | `src/agent/gate.ts` | Completion is a fact the runtime checks, not a claim the model makes. Before a run finishes, the loop runs the checks itself — tests pass, build passes, the tree is committed, the plan is closed — and refuses "done" until green, feeding failures back. |
+| **Acceptance gate** | `src/agent/gate.ts` | Completion is a fact the runtime checks, not a claim the model makes. Before a run finishes, the loop runs the checks itself (tests pass, build passes, the tree is committed, the plan is closed) and refuses "done" until green, feeding failures back. |
 | **Crash-resume** | `src/agent/mission-log.ts` | An append-only mission log checkpoints the ledger snapshot + message window every step. `maestro resume <id>` rebuilds a killed run in a fresh process from the last checkpoint and finishes it. |
 | **Composable I/O** | `src/tools/schemas.ts` | `shell.run_tests` emits a `TestRunResult`. `code.localize_failure` declares that same schema as its input and ranks candidate files. `fs.read_many` then reads them. The chain type-checks. |
 | **Production scaffolding** | `src/obs/`, `src/resilience/` | pino structured logs, a JSONL span tracer, exponential backoff with jitter, a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness, and a unit + integration test suite. |
@@ -78,14 +78,14 @@ node dist/index.js resume <missionId> --repo ./path                            #
 node dist/index.js run "audit this repo" --repo ./path --permission readonly   # observe-only run
 ```
 
-What the eval proves — and what it does not. The suite drives the **real** loop, registry,
+What the eval proves, and what it does not. The suite drives the **real** loop, registry,
 subagent, acceptance gate, and mission log through a **deterministic mock provider**, so CI
 verifies the runtime **invariants** on every push with no network: a 20+ call session with required
 subagent delegation and the run_tests→localize composition; the same task under a tiny context
 budget that forces compaction and asserts the plan survives; a cross-file bug and a multi-bug repo;
 and a crash-and-resume scenario that aborts mid-task, then resumes from the mission log in a fresh
 context and finishes green. It is strong proof of the machinery. It is **not** proof of live-model
-autonomy — that is what `--real` is for (see [Authentication](#authentication); the live path is
+autonomy. That is what `--real` is for (see [Authentication](#authentication); the live path is
 wire-verified but a full run needs a non-throttled key). See [`docs/XARC.md`](docs/XARC.md) for the
 honest map of what's deep, what's deliberately small, and how it was built.
 

@@ -30,7 +30,7 @@ Each of the five required properties does real work:
 
 Two capabilities sit on top of the five required properties because they are what a crash-resumable
 agent runtime actually needs. An **acceptance gate** (`src/agent/gate.ts`) makes completion a fact
-the runtime checks — tests pass, build passes, tree committed, plan closed — not a claim the model
+the runtime checks (tests pass, build passes, tree committed, plan closed), not a claim the model
 makes; a red gate is fed back and the run continues. A **durable mission log**
 (`src/agent/mission-log.ts`) checkpoints the ledger and message window every step, so `maestro
 resume <id>` rebuilds a killed run in a fresh process and finishes it.
@@ -39,7 +39,7 @@ The eval harness materializes a fixture repo with seeded bugs into a temporary g
 the agent, then runs the fixture's own suite to confirm the bugs are fixed. That is a
 SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvider`. Five scenarios
 span three fixtures (a flagship multi-bug repo, a cross-file import bug, a pagination repo) plus a
-crash-and-resume scenario — abort mid-task, resume from the mission log, finish green — so the
+crash-and-resume scenario (abort mid-task, resume from the mission log, finish green), so the
 harness shows the runtime invariants generalize rather than fit one happy path.
 
 ## What I cut
@@ -52,7 +52,7 @@ harness shows the runtime invariants generalize rather than fit one happy path.
   statistical scoring across many tasks.
 - **Automatic crash recovery.** Resume exists and is proven (`maestro resume`, plus a resume eval),
   but it is operator-initiated. There is no supervisor that detects a stuck run and restarts it from
-  the last checkpoint — that is the next step.
+  the last checkpoint. That is the next step.
 - **Richer code intelligence.** `code.*` uses regex and heuristics rather than a real AST or
   LSP. That is enough for localization and outlines. An AST index would localize more precisely.
 - **Parallel subagents.** Spawning is sequential. The trace model and isolation already support
@@ -62,9 +62,10 @@ harness shows the runtime invariants generalize rather than fit one happy path.
 
 ## What more time would have addressed
 
-A persistent run store with resume and replay from any span. An AST-backed `code` namespace. A
-parallel subagent scheduler that shares a token budget. A larger held-out eval set with
-per-property scoring, so depth is measured rather than asserted. The permission layer already ships (`readonly` and `safe` modes gate write, exec, network, and
+A supervisor that detects a stuck run and resumes it automatically (resume itself already ships),
+and replay of a run from any trace span. An AST-backed `code` namespace. A parallel subagent
+scheduler that shares a token budget. A larger held-out eval set with per-property scoring, so
+depth is measured rather than asserted. The permission layer already ships (`readonly` and `safe` modes gate write, exec, network, and
 high-risk tools through the registry); extending it to per-path and per-command policy is the
 next step.
 

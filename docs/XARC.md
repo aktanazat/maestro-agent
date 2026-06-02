@@ -14,7 +14,7 @@ the problem pushes everyone toward them:
   append-only mission log (`src/agent/mission-log.ts`) that checkpoints the ledger snapshot plus
   the message window every step. `maestro resume <id>` rebuilds a killed run in a fresh process
   from the last checkpoint and finishes it. Proven by an eval: abort at tool 14 (tests red),
-  resume, finish green — and it continues from the checkpoint, it does not re-plan.
+  resume, finish green. It continues from the checkpoint; it does not re-plan.
 - **Acceptance as a verifier, not a prompt.** CCX has the 8-point gate; maestro has an acceptance
   gate (`src/agent/gate.ts`) the loop runs itself before it will accept "done": tests pass, build
   passes, the tree is committed, the plan is closed. A red gate is fed back and the run continues.
@@ -35,25 +35,25 @@ the problem pushes everyone toward them:
   be architecture for its own sake. I noted it as the next step rather than half-building it.
 - **A small-model message-screening enclosure.** I did not stub a fake one. The budget meter and
   permission policy are real; the message screen is honestly absent.
-- **Visual verification in the gate** for non-UI fixtures — marked not-applicable rather than faked.
+- **Visual verification in the gate** for non-UI fixtures: marked not-applicable rather than faked.
 
 ## What is honestly smaller / unfinished
 
 - **No completed live-model run.** The Anthropic path is wired and verified to the point the API
   accepts the request (I drove it with a Claude Code OAuth token and fixed two real wire-format
-  bugs the mock never caught — dotted tool names, draft-2020-12 schemas). A full autonomous run was
+  bugs the mock never caught: dotted tool names, draft-2020-12 schemas). A full autonomous run was
   blocked by the subscription's burst rate limit; a pay-per-token key removes it. So the
-  deterministic eval proves runtime **invariants** (gate, resume, compaction, composition) — not
+  deterministic eval proves runtime **invariants** (gate, resume, compaction, composition), not
   live-model competence. I did not oversell that.
 - **One domain, scripted solver.** The eval drives the real loop/registry/subagent/gate/mission-log
   through a deterministic mock provider. That is strong proof of the machinery, weak proof of model
   autonomy. A held-out, multi-domain, real-model benchmark is the next thing I would build.
-- **No Manager/Worker, no crash-recovery supervisor** that restarts a stuck worker — resume is
+- **No Manager/Worker, no crash-recovery supervisor** that restarts a stuck worker. Resume is
   manual (`maestro resume`), not automatic.
 
 ## How it was built
 
-I built this by directing Claude Code, making the architecture and convergence calls myself —
+I built this by directing Claude Code, making the architecture and convergence calls myself,
 including running Codex as an adversarial reviewer (`/grill-me`) across the plan, the code, and
 this X-ARC-specific pass; the reviews and how they changed the build are in `docs/reviews/`. Given
 that X-ARC staffs its own lab with agents, I figured the honest thing was to show the orchestration
