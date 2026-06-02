@@ -24,6 +24,21 @@ export interface ToolServices {
   spawnSubagent?: SubagentRunner;
   /** Shared limiter registry, keyed by resource name. */
   rateLimiter?: (resource: string) => { acquire: () => Promise<void> };
+  /** The active run's durable plan ledger. `plan.*` tools mutate it; it survives compaction. */
+  ledger?: LedgerHandle;
+  /** Read-only registry view (names + namespaces) for the `agent.list_tools` discovery tool. */
+  registryView?: { names: () => string[]; namespaces: () => string[] };
+}
+
+/** Structural view of the Ledger so tools need not import the agent layer (avoids cycles). */
+export interface LedgerHandle {
+  setPlan(texts: string[]): Array<{ id: number; text: string; status: string }>;
+  addPlanItem(text: string, status?: "pending" | "active" | "done" | "blocked"): { id: number; text: string };
+  updatePlan(id: number, status: "pending" | "active" | "done" | "blocked", note?: string): { id: number; status: string };
+  getPlan(): ReadonlyArray<{ id: number; text: string; status: string; note?: string }>;
+  addFact(key: string, value: string): void;
+  noteFile(path: string, digest: string): void;
+  planComplete(): boolean;
 }
 
 export type SubagentRunner = (req: SubagentRequest) => Promise<SubagentResult>;
@@ -52,7 +67,7 @@ export interface SubagentResult {
  * model-facing JSON Schema from `input`, validates I/O, and dispatches by `name`.
  * There is no central switch statement — adding a tool means adding one of these.
  */
-export interface Tool<I = unknown, O = unknown> {
+export interface Tool<I = any, O = any> {
   /** Dotted name: `<namespace>.<verb>`, e.g. "fs.read". Unique across the registry. */
   readonly name: string;
   readonly namespace: string;
@@ -67,19 +82,24 @@ export interface Tool<I = unknown, O = unknown> {
   readonly effect: "read" | "write" | "exec" | "network" | "meta";
   /** Whether a transient failure of this handler is worth retrying. */
   readonly idempotent: boolean;
-  handler: (input: I, ctx: ToolContext) => Promise<O>;
+  // Method-style (not arrow property) so a concrete Tool<X> remains assignable to Tool<any>.
+  handler(input: I, ctx: ToolContext): Promise<O>;
 }
 
-/** Helper to define a tool with full type inference from its zod schemas. */
-export function defineTool<I, O>(spec: {
+/**
+ * Define a tool with full type inference from its zod schemas. `z.infer` gives the PARSED
+ * (post-default, post-coercion) type, so handler inputs are exactly what the registry hands
+ * them after validation — defaults are applied, optionals resolved.
+ */
+export function defineTool<S extends z.ZodType, O extends z.ZodType>(spec: {
   name: string;
   description: string;
-  input: z.ZodType<I>;
-  output: z.ZodType<O>;
+  input: S;
+  output: O;
   effect: Tool["effect"];
   idempotent?: boolean;
-  handler: (input: I, ctx: ToolContext) => Promise<O>;
-}): Tool<I, O> {
+  handler: (input: z.infer<S>, ctx: ToolContext) => Promise<z.infer<O>>;
+}): Tool<z.infer<S>, z.infer<O>> {
   const namespace = spec.name.split(".")[0] ?? spec.name;
   return {
     name: spec.name,
