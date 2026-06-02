@@ -23,7 +23,7 @@ function ping(behavior: "ok" | "throw") {
   });
 }
 
-function harness(provider: MockProvider, registry: ToolRegistry) {
+function harness(provider: MockProvider) {
   const ledger = new Ledger("goal");
   const context = new ConversationContext({ system: "S", ledger, provider, maxContextTokens: 100_000 });
   context.pushUser([{ type: "text", text: "go" }]);
@@ -34,7 +34,7 @@ describe("agent loop", () => {
   it("stops at the step budget and reports max_steps", async () => {
     const registry = new ToolRegistry().register(ping("ok"));
     const provider = new MockProvider(() => callTool("test.ping", {}));
-    const { context } = harness(provider, registry);
+    const { context } = harness(provider);
     const result = await runAgent({
       provider,
       registry,
@@ -53,7 +53,7 @@ describe("agent loop", () => {
     const registry = new ToolRegistry().register(ping("throw"));
     // First turn calls the throwing tool; second turn ends the run.
     const provider = new MockProvider([callTool("test.ping", {}), say("done despite the error")]);
-    const { context } = harness(provider, registry);
+    const { context } = harness(provider);
     const result = await runAgent({
       provider,
       registry,

@@ -63,7 +63,7 @@ describe("subagent orchestration", () => {
   });
 
   it("returns the SAME structured shape even when the child never calls task.complete", async () => {
-    const provider = new MockProvider((req: ModelRequest) => callTool("fs.read", { path: "note.txt" })); // loops, never completes
+    const provider = new MockProvider(() => callTool("fs.read", { path: "note.txt" })); // loops, never completes
     const spawn = makeSpawner(deps(provider));
     const result = await spawn({ objective: "never finish", allowedTools: ["fs.read"], maxSteps: 4 });
     expect(result).toMatchObject({ success: false });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { withRetry, computeBackoff } from "../../src/resilience/retry.js";
 import { RateLimiter } from "../../src/resilience/ratelimit.js";
 import { ModelError, RateLimitError, MaestroError } from "../../src/resilience/errors.js";
@@ -66,7 +66,7 @@ describe("RateLimiter (token bucket)", () => {
   });
 
   it("acquire throws RateLimitError when the wait would exceed maxWaitMs", async () => {
-    let now = 0;
+    const now = 0;
     const limiter = new RateLimiter({ ratePerSec: 1, burst: 1, now: () => now, sleep: async () => {}, maxWaitMs: 50 });
     await limiter.acquire(); // consume the one token
     await expect(limiter.acquire()).rejects.toBeInstanceOf(RateLimitError);

@@ -29,7 +29,7 @@ export class MaestroError extends Error {
   readonly code: ErrorCode;
   readonly retryable: boolean;
   readonly context: ErrorContext;
-  readonly cause?: unknown;
+  override readonly cause?: unknown;
 
   constructor(
     code: ErrorCode,
