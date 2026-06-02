@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MissionLog } from "../../src/agent/mission-log.js";
 import { Ledger } from "../../src/agent/ledger.js";
-import { ConversationContext } from "../../src/agent/context.js";
+import { ConversationContext, repairToolPairing } from "../../src/agent/context.js";
 import { MockProvider, say } from "../../src/llm/mock.js";
+import type { ModelMessage } from "../../src/llm/provider.js";
 
 let dir: string;
 let clock = 1000;
@@ -71,6 +72,43 @@ describe("Ledger.fromSnapshot", () => {
     // Next id must not collide with restored ids.
     const added = restored.addPlanItem("three");
     expect(added.id).toBe(3);
+  });
+});
+
+describe("repairToolPairing (crash mid-batch)", () => {
+  const ids = (msgs: ModelMessage[]) =>
+    msgs.flatMap((m) => m.content).filter((b) => b.type === "tool_result").map((b) => (b as { tool_use_id: string }).tool_use_id);
+
+  it("backfills tool_uses left unanswered by a crash so the resumed stream is API-valid", () => {
+    const msgs: ModelMessage[] = [
+      { role: "assistant", content: [
+        { type: "tool_use", id: "a", name: "fs.read", input: {} },
+        { type: "tool_use", id: "b", name: "fs.edit", input: {} },
+      ] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "ok" }] }, // only "a" answered
+    ];
+    const repaired = repairToolPairing(msgs);
+    expect(new Set(ids(repaired))).toEqual(new Set(["a", "b"])); // "b" backfilled
+    const bResult = repaired[1]!.content.find((c) => c.type === "tool_result" && c.tool_use_id === "b");
+    expect((bResult as { is_error?: boolean }).is_error).toBe(true);
+  });
+
+  it("appends a results message when the crash left the assistant turn with no answers at all", () => {
+    const msgs: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "tool_use", id: "x", name: "shell.run", input: {} }] },
+    ];
+    const repaired = repairToolPairing(msgs);
+    expect(repaired).toHaveLength(2);
+    expect(ids(repaired)).toEqual(["x"]);
+  });
+
+  it("is a no-op when every tool_use is already answered", () => {
+    const msgs: ModelMessage[] = [
+      { role: "assistant", content: [{ type: "tool_use", id: "a", name: "fs.read", input: {} }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "ok" }] },
+    ];
+    expect(repairToolPairing(msgs)).toHaveLength(2);
+    expect(ids(repairToolPairing(msgs))).toEqual(["a"]);
   });
 });
 
