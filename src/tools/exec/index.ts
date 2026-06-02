@@ -27,7 +27,7 @@ async function detectRunner(ctx: ToolContext): Promise<{ runner: string; file: s
   return { runner: "pytest", file: "python3", args: ["-m", "pytest", "-q"] };
 }
 
-function parseTestOutput(_runner: string, stdout: string, stderr: string): { passed: number; failed: number; failures: TestFailure[] } {
+export function parseTestOutput(_runner: string, stdout: string, stderr: string): { passed: number; failed: number; failures: TestFailure[] } {
   const text = stdout + "\n" + stderr;
   const failures: TestFailure[] = [];
   let passed = 0;

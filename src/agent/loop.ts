@@ -102,6 +102,8 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
   let structured: unknown;
   let status: RunStatus = "completed";
   let lastError: MaestroError | undefined;
+  let nudges = 0;
+  const MAX_NUDGES = 2;
 
   try {
     for (;;) {
@@ -159,10 +161,23 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
       const toolUses = response.content.filter((b): b is ToolUseBlock => b.type === "tool_use");
 
       if (toolUses.length === 0) {
-        // Model produced no tool call. If a terminal condition holds, we're done; else
-        // nudge it once by recording the turn and letting the next loop continue. For the
-        // top-level agent, end_turn with no tools means it considers the task finished.
         if (!config.completionTool) {
+          // Top-level agent stopped calling tools. If its plan still has open steps, don't take
+          // the silence as success — nudge it (bounded) to either finish the work or explicitly
+          // mark the remaining steps done/blocked. This closes the early-quit hole.
+          if (config.isDone && !config.isDone(context) && nudges < MAX_NUDGES) {
+            nudges += 1;
+            logger.warn({ nudges }, "model stopped with an incomplete plan; nudging");
+            context.pushUser([
+              {
+                type: "text",
+                text:
+                  "You stopped without a tool call, but the plan still has open steps. Either keep working, " +
+                  "or use plan.update to mark each remaining step done or blocked, then give your final summary.",
+              },
+            ]);
+            continue;
+          }
           status = "completed";
           break;
         }

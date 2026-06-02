@@ -59,10 +59,11 @@ CLI (commander) -> runTask (composition root)
 npm install
 cp .env.example .env        # set ANTHROPIC_API_KEY for live runs
 
-npm run test                # 36 unit + integration tests
+npm run test                # 46 unit + integration tests
 npm run eval                # deterministic eval suite (mock solver, no API key)
 npm run eval -- --real      # same tasks against the live model
 npm run build && node dist/index.js run "fix the failing tests" --repo ./path
+node dist/index.js run "audit this repo" --repo ./path --permission readonly   # observe-only run
 ```
 
 The eval suite is built to be hard to fake. One task requires a session of more than 20 tool

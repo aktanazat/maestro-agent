@@ -226,6 +226,7 @@ const reset = defineTool({
   input: z.object({ ref: z.string().default("HEAD"), mode: z.enum(["soft", "mixed", "hard"]).default("mixed") }),
   output: z.object({ ref: z.string(), mode: z.string() }),
   effect: "write",
+  risk: "high",
   handler: async (input, ctx) => {
     ensureOk(await git(ctx, ["reset", `--${input.mode}`, input.ref]));
     return { ref: input.ref, mode: input.mode };

@@ -21,8 +21,9 @@ program
   .option("-r, --repo <path>", "Workspace/repository path the agent operates in.", ".")
   .option("--max-steps <n>", "Override the step budget.", (v) => parseInt(v, 10))
   .option("--max-tokens <n>", "Override the token budget.", (v) => parseInt(v, 10))
-  .action(async (goal: string, options: { repo: string; maxSteps?: number; maxTokens?: number }) => {
-    const config = loadConfig();
+  .option("--permission <mode>", "Permission mode: auto | readonly | safe.")
+  .action(async (goal: string, options: { repo: string; maxSteps?: number; maxTokens?: number; permission?: string }) => {
+    const config = loadConfig(options.permission ? { permissionMode: options.permission } : {});
     const logger = createLogger({ level: config.logLevel, pretty: config.logPretty, base: { component: "maestro" } });
     try {
       const result = await runTask({

@@ -34,6 +34,10 @@ export interface SpawnDeps {
   parentSpan?: Span;
   /** Shared rate limiter factory — inherited so child external calls are throttled too. */
   rateLimiter?: (resource: string) => { acquire: () => Promise<void> };
+  /** Shared project index — inherited so the child reuses the cached workspace view. */
+  projectIndex?: import("../tools/types.js").ProjectIndexHandle;
+  /** Permission policy — inherited so a read-only/safe run constrains subagents too. */
+  checkPermission?: ToolServices["checkPermission"];
   /** Maximum nesting depth to prevent runaway recursion. */
   maxDepth?: number;
   depth?: number;
@@ -102,6 +106,8 @@ export function makeSpawner(deps: SpawnDeps) {
       rateLimiter: deps.rateLimiter,
       ledger,
       registryView: { names: () => scoped.names(), namespaces: () => scoped.namespaces() },
+      projectIndex: deps.projectIndex,
+      checkPermission: deps.checkPermission,
     };
 
     const result = await runAgent({

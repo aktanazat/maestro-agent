@@ -5,6 +5,7 @@ import {
   ToolNotFoundError,
   ToolOutputError,
   ToolExecutionError,
+  ToolDeniedError,
   asMaestroError,
 } from "../resilience/errors.js";
 
@@ -131,8 +132,16 @@ export class ToolRegistry {
    */
   async execute(name: string, rawInput: unknown, ctx: ToolContext): Promise<unknown> {
     const tool = this.get(name);
-    const span = ctx.tracer.startSpan("tool.execute", { tool: name, effect: tool.effect });
+    const span = ctx.tracer.startSpan("tool.execute", { tool: name, effect: tool.effect, risk: tool.risk });
     const t0 = Date.now();
+
+    // Permission policy runs BEFORE input validation or the handler — a denied tool never executes.
+    const denial = ctx.services.checkPermission?.({ name, effect: tool.effect, risk: tool.risk });
+    if (denial) {
+      span.setAttribute("denied", denial);
+      span.end("error");
+      throw new ToolDeniedError(name, denial);
+    }
 
     const parsedInput = tool.input.safeParse(rawInput);
     if (!parsedInput.success) {
@@ -152,6 +161,9 @@ export class ToolRegistry {
       const durationMs = Date.now() - t0;
       span.setAttribute("durationMs", durationMs);
       span.end("ok");
+      // A write/exec tool may have changed the tree; drop the cached project index so later
+      // reads see fresh state. Centralizing this here means no individual tool has to remember.
+      if (tool.effect === "write" || tool.effect === "exec") ctx.services.projectIndex?.invalidate();
       ctx.services.onToolResult?.({ name, input: parsedInput.data, output: parsedOutput.data, ok: true, durationMs });
       return parsedOutput.data;
     } catch (err) {

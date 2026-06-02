@@ -11,6 +11,7 @@ import { Ledger } from "./ledger.js";
 import { runAgent, type AgentRunResult, type Budgets } from "./loop.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { makeSpawner } from "../subagent/spawn.js";
+import { ProjectIndex } from "../tools/project-index.js";
 import { createLogger, type Logger } from "../obs/logger.js";
 import { Tracer } from "../obs/tracing.js";
 import { RateLimiterRegistry } from "../resilience/ratelimit.js";
@@ -75,12 +76,18 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
   });
 
   const rateLimiter = (resource: string) => limiterRegistry.for(resource);
+  // One shared project index per run: subagents reuse it, and any write/exec (parent or child)
+  // invalidates the single cache, so reads always see fresh state.
+  const projectIndex = new ProjectIndex(workspace);
+  const checkPermission = permissionPolicy(opts.config.permissionMode);
   const services: ToolServices = {
-    spawnSubagent: makeSpawner({ provider, registry, workspace, logger, tracer, rateLimiter }),
+    spawnSubagent: makeSpawner({ provider, registry, workspace, logger, tracer, rateLimiter, projectIndex, checkPermission }),
     rateLimiter,
     ledger,
     registryView: { names: () => registry.names(), namespaces: () => registry.namespaces() },
     onToolResult: opts.onToolResult,
+    projectIndex,
+    checkPermission,
   };
 
   const budgets: Budgets = {
@@ -108,6 +115,24 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
   logger.info({ status: result.status, steps: result.steps, tokensUsed: result.tokensUsed, compactions: result.compactions }, "task finished");
 
   return { ...result, ledger: ledger.snapshot(), traceId: tracer.traceId, contextStats: context.stats() };
+}
+
+/**
+ * Translate the configured permission mode into the policy the registry enforces before every
+ * tool call. `readonly` is genuinely useful for observe-only audits; `safe` blocks the
+ * irreversible tools (reset --hard, recursive delete) unless explicitly allowed.
+ */
+export function permissionPolicy(mode: Config["permissionMode"]): ToolServices["checkPermission"] {
+  if (mode === "readonly") {
+    return (t) =>
+      t.effect === "write" || t.effect === "exec" || t.effect === "network"
+        ? `read-only mode: ${t.effect} tools are disabled`
+        : null;
+  }
+  if (mode === "safe") {
+    return (t) => (t.risk === "high" ? "safe mode: high-risk tools require explicit approval" : null);
+  }
+  return undefined;
 }
 
 export function makeProvider(config: Config, logger: Logger): ModelProvider {

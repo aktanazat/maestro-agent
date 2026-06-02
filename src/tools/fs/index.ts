@@ -117,6 +117,7 @@ const remove = defineTool({
   input: PathInput.extend({ recursive: z.boolean().default(false) }),
   output: z.object({ path: z.string(), deleted: z.boolean() }),
   effect: "write",
+  risk: "high",
   handler: async (input, ctx) => {
     const abs = resolveInside(ctx.workspace, input.path);
     await fs.rm(abs, { recursive: input.recursive, force: true });

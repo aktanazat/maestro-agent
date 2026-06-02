@@ -87,6 +87,26 @@ describe("agent loop", () => {
     expect(new Set(resultIds)).toEqual(new Set(toolUseIds));
   });
 
+  it("nudges instead of accepting an early 'done' while the plan is incomplete", async () => {
+    const registry = new ToolRegistry().register(ping("ok"));
+    const provider = new MockProvider(() => say("I think I'm done.")); // never calls a tool
+    const { context } = harness(provider);
+    const result = await runAgent({
+      provider,
+      registry,
+      context,
+      budgets: { maxSteps: 20, maxTokens: 1_000_000 },
+      services: {},
+      workspace: "/tmp",
+      logger: silentLogger(),
+      tracer: noopTracer(),
+      isDone: () => false, // plan never complete
+    });
+    expect(result.status).toBe("completed");
+    // Initial call + 2 bounded nudges before giving up = 3 model calls.
+    expect(provider.calls.length).toBe(3);
+  });
+
   it("feeds a failed tool back as an error result instead of crashing the run", async () => {
     const registry = new ToolRegistry().register(ping("throw"));
     // First turn calls the throwing tool; second turn ends the run.

@@ -30,6 +30,17 @@ export interface ToolServices {
   registryView?: { names: () => string[]; namespaces: () => string[] };
   /** Observability hook fired after every tool dispatch with its validated I/O. */
   onToolResult?: (rec: ToolResultEvent) => void;
+  /** Per-run cached view of the workspace (file list + contents); invalidated after writes. */
+  projectIndex?: ProjectIndexHandle;
+  /** Permission policy. Returns a denial reason to block a tool, or null/undefined to allow. */
+  checkPermission?: (tool: { name: string; effect: Tool["effect"]; risk: Tool["risk"] }) => string | null | undefined;
+}
+
+export interface ProjectIndexHandle {
+  files(exts?: string[]): Promise<string[]>;
+  relFiles(exts?: string[]): Promise<string[]>;
+  content(absPath: string): Promise<string>;
+  invalidate(): void;
 }
 
 export interface ToolResultEvent {
@@ -91,6 +102,12 @@ export interface Tool<I = any, O = any> {
    * deciding what is safe to run inside a read-only subagent.
    */
   readonly effect: "read" | "write" | "exec" | "network" | "meta";
+  /**
+   * Blast radius, used by the permission policy. `low` = read/inspect, `medium` = scoped
+   * mutation or single external call, `high` = destructive or hard to undo (reset --hard,
+   * recursive delete, arbitrary shell). Defaults from `effect` but can be raised per tool.
+   */
+  readonly risk: "low" | "medium" | "high";
   /** Whether a transient failure of this handler is worth retrying. */
   readonly idempotent: boolean;
   // Method-style (not arrow property) so a concrete Tool<X> remains assignable to Tool<any>.
@@ -108,6 +125,7 @@ export function defineTool<S extends z.ZodType, O extends z.ZodType>(spec: {
   input: S;
   output: O;
   effect: Tool["effect"];
+  risk?: Tool["risk"];
   idempotent?: boolean;
   handler: (input: z.infer<S>, ctx: ToolContext) => Promise<z.infer<O>>;
 }): Tool<z.infer<S>, z.infer<O>> {
@@ -119,7 +137,14 @@ export function defineTool<S extends z.ZodType, O extends z.ZodType>(spec: {
     input: spec.input,
     output: spec.output,
     effect: spec.effect,
+    risk: spec.risk ?? defaultRisk(spec.effect),
     idempotent: spec.idempotent ?? spec.effect === "read",
     handler: spec.handler,
   };
+}
+
+function defaultRisk(effect: Tool["effect"]): Tool["risk"] {
+  if (effect === "read" || effect === "meta") return "low";
+  if (effect === "exec") return "high";
+  return "medium"; // write, network
 }

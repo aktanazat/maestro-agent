@@ -2,14 +2,32 @@ import { promises as fs } from "node:fs";
 import { join, relative, resolve, extname, basename } from "node:path";
 import { z } from "zod";
 import { defineTool } from "../types.js";
-import type { Tool } from "../types.js";
+import type { Tool, ToolContext } from "../types.js";
 import { resolveInside } from "../../util/paths.js";
 import { runCommand } from "../../util/exec.js";
 import { GrepResultSchema, LocalizationSchema, TestRunResultSchema } from "../schemas.js";
 
 const IGNORE = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
 
-async function collectFiles(root: string, exts: string[] | null, limit: number): Promise<string[]> {
+/**
+ * Absolute file paths, served from the per-run ProjectIndex when present (one cached walk),
+ * else an uncached walk. Every `code.*` tool reads through here, so the tree is walked once per
+ * run rather than once per call.
+ */
+async function listFiles(ctx: ToolContext, exts: string[] | null, limit = 5000): Promise<string[]> {
+  const idx = ctx.services.projectIndex;
+  if (idx) return idx.files(exts ?? undefined);
+  return walkUncached(resolve(ctx.workspace), exts, limit);
+}
+
+/** Memoized file content via the index, else a direct read. */
+async function readCached(ctx: ToolContext, abs: string): Promise<string> {
+  const idx = ctx.services.projectIndex;
+  if (idx) return idx.content(abs);
+  return fs.readFile(abs, "utf8").catch(() => "");
+}
+
+async function walkUncached(root: string, exts: string[] | null, limit: number): Promise<string[]> {
   const out: string[] = [];
   async function walk(dir: string) {
     if (out.length >= limit) return;
@@ -45,7 +63,7 @@ const grep = defineTool({
   effect: "read",
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
-    const files = await collectFiles(root, null, 5000);
+    const files = await listFiles(ctx, null, 5000);
     const re = new RegExp(input.pattern, input.flags.includes("g") ? input.flags : input.flags + "g");
     const matches: Array<{ file: string; line: number; text: string }> = [];
     for (const abs of files) {
@@ -53,7 +71,7 @@ const grep = defineTool({
       if (input.include && !rel.includes(input.include)) continue;
       let content: string;
       try {
-        content = await fs.readFile(abs, "utf8");
+        content = await readCached(ctx, abs);
       } catch {
         continue;
       }
@@ -78,12 +96,12 @@ const findSymbol = defineTool({
   effect: "read",
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
-    const files = await collectFiles(root, [".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"], 5000);
+    const files = await listFiles(ctx, [".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"], 5000);
     const n = input.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`\\b(function|class|const|let|var|def|interface|type|enum)\\s+${n}\\b|\\b${n}\\s*[:=]\\s*(async\\s+)?(function|\\()`);
     const definitions: Array<{ file: string; line: number; text: string }> = [];
     for (const abs of files) {
-      const lines = (await fs.readFile(abs, "utf8").catch(() => "")).split("\n");
+      const lines = (await readCached(ctx, abs)).split("\n");
       for (let i = 0; i < lines.length; i++) {
         if (re.test(lines[i]!)) {
           definitions.push({ file: relative(root, abs), line: i + 1, text: lines[i]!.trim().slice(0, 200) });
@@ -104,7 +122,7 @@ const listByExt = defineTool({
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
     const ext = input.ext.startsWith(".") ? input.ext : "." + input.ext;
-    const files = (await collectFiles(root, [ext], input.limit)).map((a) => relative(root, a));
+    const files = (await listFiles(ctx, [ext], input.limit)).map((a) => relative(root, a));
     return { ext, files, count: files.length };
   },
 });
@@ -116,13 +134,12 @@ const countLines = defineTool({
   output: z.object({ totalFiles: z.number(), totalLines: z.number(), byExt: z.array(z.object({ ext: z.string(), files: z.number(), lines: z.number() })) }),
   effect: "read",
   handler: async (_input, ctx) => {
-    const root = resolve(ctx.workspace);
-    const files = await collectFiles(root, null, 20000);
+    const files = await listFiles(ctx, null, 20000);
     const map = new Map<string, { files: number; lines: number }>();
     let totalLines = 0;
     for (const abs of files) {
       const ext = extname(abs) || "(none)";
-      const content = await fs.readFile(abs, "utf8").catch(() => "");
+      const content = await readCached(ctx, abs);
       const lines = content ? content.split("\n").length : 0;
       totalLines += lines;
       const cur = map.get(ext) ?? { files: 0, lines: 0 };
@@ -143,11 +160,11 @@ const findTodos = defineTool({
   effect: "read",
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
-    const files = await collectFiles(root, [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".md"], 5000);
+    const files = await listFiles(ctx, [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rs", ".java", ".md"], 5000);
     const re = /\b(TODO|FIXME|HACK|XXX)\b:?(.*)/;
     const items: Array<{ file: string; line: number; marker: string; text: string }> = [];
     for (const abs of files) {
-      const lines = (await fs.readFile(abs, "utf8").catch(() => "")).split("\n");
+      const lines = (await readCached(ctx, abs)).split("\n");
       for (let i = 0; i < lines.length; i++) {
         const m = re.exec(lines[i]!);
         if (m) {
@@ -235,7 +252,7 @@ const localizeFailure = defineTool({
   effect: "read",
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
-    const srcFiles = await collectFiles(root, [".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"], 5000);
+    const srcFiles = await listFiles(ctx, [".ts", ".tsx", ".js", ".jsx", ".mjs", ".py"], 5000);
     const scores = new Map<string, { score: number; reasons: string[] }>();
     const bump = (file: string, by: number, reason: string) => {
       const rel = relative(root, file);
@@ -261,7 +278,7 @@ const localizeFailure = defineTool({
       const idents = [...new Set((f.message.match(/[A-Za-z_$][\w$]{2,}/g) ?? []).slice(0, 12))];
       for (const abs of srcFiles) {
         if (/\.(test|spec)\./.test(abs)) continue;
-        const content = await fs.readFile(abs, "utf8").catch(() => "");
+        const content = await readCached(ctx, abs);
         for (const id of idents) {
           if (new RegExp(`\\b(function|class|const|def|export)\\b[^\\n]*\\b${id}\\b`).test(content)) {
             bump(abs, 2, `defines '${id}' from failure message`);

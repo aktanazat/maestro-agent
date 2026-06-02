@@ -40,17 +40,20 @@ export async function runCommand(file: string, args: string[], opts: RunOptions)
       stripFinalNewline: false,
       input: opts.input,
     });
+    // execa with reject:false can return a timed-out command as a normal result. A timeout is a
+    // failure, not an exit code the caller should interpret — surface it as a typed TimeoutError.
+    if (result.timedOut) throw new TimeoutError(`command ${file}`, timeoutMs);
     return {
       command: [file, ...args].join(" "),
       exitCode: result.exitCode ?? (result.failed ? 1 : 0),
       stdout: clipBytes(result.stdout ?? "", maxOutputBytes),
       stderr: clipBytes(result.stderr ?? "", maxOutputBytes),
       durationMs: Date.now() - t0,
-      timedOut: Boolean(result.timedOut),
+      timedOut: false,
     };
   } catch (err) {
     const e = err as { timedOut?: boolean; signal?: string; message?: string };
-    if (e.timedOut) throw new TimeoutError(`command ${file}`, timeoutMs);
+    if (e.timedOut || /timed out/i.test(e.message ?? "")) throw new TimeoutError(`command ${file}`, timeoutMs);
     if (e.signal === "SIGTERM" || e.signal === "SIGKILL") {
       throw new ToolExecutionError(file, "aborted", { context: { signal: e.signal } });
     }

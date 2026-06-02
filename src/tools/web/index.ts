@@ -18,9 +18,11 @@ const fetchUrl = defineTool({
   effect: "network",
   idempotent: true,
   handler: async (input, ctx) => {
-    await ctx.services.rateLimiter?.("web").acquire();
     return withRetry(
       async () => {
+        // Acquire a rate-limit slot INSIDE the retried attempt, so every retry is also throttled
+        // (a burst of retries must not bypass the limiter).
+        await ctx.services.rateLimiter?.("web").acquire();
         const res = await withTimeout(fetch(input.url, { signal: ctx.signal, redirect: "follow" }), 20_000, "web.fetch", ctx.signal);
         if (res.status >= 500) throw new ModelError(`upstream ${res.status}`, { retryable: true });
         if (!res.ok && res.status !== 404) throw new ToolExecutionError("web.fetch", `HTTP ${res.status}`);

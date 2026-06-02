@@ -4,7 +4,7 @@
 
 An autonomous software-engineering agent in TypeScript. One model-driven loop
 (`src/agent/loop.ts`) steers a registry of 60 tools across 8 namespaces (`fs`, `git`, `code`,
-`shell`, `plan`, `agent`, `github`, `web`). Tools are self-describing `Tool<I,O>` values. The
+`shell`, `plan`, `agent`, `github`, `web`). Tools are self-describing `Tool<I,O>` values with a risk level. The
 model picks them through Anthropic tool use, and the registry validates and dispatches through a
 single path. There is no hand-routing and no `switch (toolName)`.
 
@@ -23,7 +23,7 @@ Each of the five required properties does real work:
    compaction.
 4. **Production scaffolding.** pino logs, a JSONL span tracer, exponential backoff with jitter,
    a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness,
-   and 36 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
+   a per-run project index that walks the tree once instead of once per `code.*` call, and 46 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
 5. **Composable I/O.** `shell.run_tests` and `code.localize_failure` share one `TestRunResult`
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.
@@ -50,8 +50,9 @@ SWE-bench-shaped signal, and it runs in CI with no API key through a `MockProvid
 
 A persistent run store with resume and replay from any span. An AST-backed `code` namespace. A
 parallel subagent scheduler that shares a token budget. A larger held-out eval set with
-per-property scoring, so depth is measured rather than asserted. I would also add a permission
-layer that gates write, exec, and network tools behind policy when the repo is untrusted.
+per-property scoring, so depth is measured rather than asserted. The permission layer already ships (`readonly` and `safe` modes gate write, exec, network, and
+high-risk tools through the registry); extending it to per-path and per-command policy is the
+next step.
 
 ## One design decision I would defend
 
