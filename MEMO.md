@@ -23,15 +23,15 @@ Each of the five required properties does real work:
    compaction.
 4. **Production scaffolding.** pino logs, a JSONL span tracer, exponential backoff with jitter,
    a token-bucket rate limiter on every external call, a typed error hierarchy, 
-   a per-run project index that walks the tree once instead of once per `code.*` call, and 68 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
+   a per-run project index that walks the tree once instead of once per `code.*` call, and 69 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
 5. **Composable I/O.** `shell.run_tests` and `code.localize_failure` share one `TestRunResult`
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.
 
 Three capabilities sit on top of the five required properties because they are what a robust
-agent runtime actually needs. An **acceptance gate** (`src/agent/gate.ts`) makes completion a fact
-the runtime checks (tests pass, build passes, tree committed, plan closed), not a claim the model
-makes; a red gate is fed back and the run continues. A **durable mission log**
+agent runtime actually needs. An **acceptance gate** (`src/agent/gate.ts`) lets the runtime, not the
+model, decide a run is finished: it re-runs the checks (tests pass, build passes, tree committed,
+plan closed) and feeds a red gate back so the run keeps going. A **durable mission log**
 (`src/agent/mission-log.ts`) checkpoints the ledger and message window every step, so `maestro
 resume <id>` rebuilds a killed run in a fresh process and finishes it. **Tool retrieval**
 (`src/tools/retrieval.ts`) advertises a relevant subset of the 61 tools each turn (lexical BM25 over
@@ -83,13 +83,14 @@ prompt, no risk of the parent's features leaking in. I did the opposite. There i
 parameterized by the registry it sees, the context it owns, its budget, and an optional
 completion tool.
 
-I would defend that on three grounds. First, isolation becomes structural. The child cannot
-touch an ungranted tool because that tool is not in its registry subset and not in its `Map`.
-There is nothing to call and no allowlist to forget. Second, the contract is enforced by the
-type system instead of by parsing prose. The child returns by calling a completion tool whose
-input schema is `SubagentResultSchema`. An invalid return is a validation error at the boundary,
-and a child that never returns cleanly still produces the same shape for the parent. Third, every
-capability the parent gains, the child inherits: tracing, retries, rate limiting, compaction, and
-a writable ledger. A subagent is then a full agent with a narrower world, which is the property
-that makes delegation worth having. The cost is that the loop has to be written to be reentrant
-and configuration-driven. That complexity is real, and this is the right place to pay it.
+Three things make me confident in that call. The first is that isolation stops being a discipline
+and becomes structural: the child cannot touch an ungranted tool because that tool is not in its
+registry subset and not in its `Map`. Nothing to call, no allowlist to forget. There's also the
+contract, which the type system enforces rather than prose-parsing — the child returns by calling a
+completion tool whose input schema is `SubagentResultSchema`, so an invalid return fails at the
+boundary, and a child that never returns cleanly still hands the parent the same shape. The part I
+care about most is inheritance. Every capability the parent gains, the child gets for free: tracing,
+retries, rate limiting, compaction, a writable ledger. That makes a subagent a full agent with a
+narrower world, which is the property that makes delegation worth having at all. The price is a loop
+written to be reentrant and configuration-driven. That complexity is real, and this is the right
+place to pay it.

@@ -24,7 +24,7 @@ the problem pushes everyone toward them:
 - **Acceptance as a verifier, not a prompt.** CCX has the 8-point gate; maestro has an acceptance
   gate (`src/agent/gate.ts`) the loop runs itself before it will accept "done": tests pass, build
   passes, the tree is committed, the plan is closed. A red gate is fed back and the run continues.
-  Completion is a fact the runtime checks, not a claim the model makes.
+  The runtime decides the run is done by checking; the model never gets to just assert it.
 - **Durable working memory across compaction.** The plan ledger is re-rendered into the system
   prompt every call, so it outlives the compaction that summarizes raw tool output away.
 - **A real isolation boundary for sub-work.** `agent.spawn` runs the same loop with a registry
