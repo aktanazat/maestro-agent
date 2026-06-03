@@ -34,3 +34,12 @@ control set (`plan.*`, `agent.*`) and the model's recently-used tools. A new `ag
 tool lets the model pull in anything the selector missed. Applies only when the registry is large
 (subagents keep their full small scoped set). See the eval check that the advertised schemas stay
 under a token budget while the tools needed to fix the bug remain discoverable.
+
+**#2, Reflexion** (`src/agent/loop.ts`): on a failed acceptance gate, the failing checks are written
+as a durable `acceptance-gate` fact in the ledger, not only as a transient user message. Because the
+ledger is re-rendered into the system prompt and survives compaction, the lesson persists across
+gate retries so the agent stops repeating the same mistake. This is the exact gap the live Llama run
+exposed (it oscillated on a fix without remembering). Tested in `tests/unit/loop.test.ts`.
+
+Both are inference-only (no fine-tuning) and provider-agnostic. The remaining shortlist items
+(Agentless default chain, query-aware compaction, ADaPT) are noted as next steps, not built.
