@@ -6,6 +6,7 @@ import type { Logger } from "../obs/logger.js";
 import type { Tracer, Span } from "../obs/tracing.js";
 import { BudgetExceededError, MaestroError, asMaestroError } from "../resilience/errors.js";
 import type { AcceptanceGate, GateResult } from "./gate.js";
+import { DEFAULT_ADVERTISE } from "../tools/retrieval.js";
 
 export interface Budgets {
   maxSteps: number;
@@ -69,6 +70,8 @@ export interface RunAgentConfig {
   missionLog?: import("./mission-log.js").MissionLog;
   /** Seed the step counter on resume so the audit trail continues instead of restarting at 0. */
   startStep?: number;
+  /** If set, advertise a retrieved subset of tools each turn instead of the whole registry. */
+  toolRetriever?: import("../tools/retrieval.js").ToolRetriever;
   /** Per-call max output tokens for the model. */
   maxOutputTokens?: number;
   temperature?: number;
@@ -105,6 +108,7 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
   };
 
   const toolCalls: ToolCallRecord[] = [];
+  const recentTools: string[] = [];
   let steps = config.startStep ?? 0;
   let tokensUsed = 0;
   let finalText = "";
@@ -139,14 +143,25 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
       // Context management is invoked explicitly here, every step, before the model call.
       await context.maybeCompact();
 
-      const reqSpan = span.child("model.call", { step: steps });
+      // Tool retrieval: advertise a relevant subset (control plane + recent + top-ranked) instead
+      // of all 60 schemas, when a retriever is configured. The registry still dispatches any tool
+      // the model names, so this only narrows what is OFFERED, never what is callable.
+      const advertised = config.toolRetriever
+        ? config.toolRetriever.selectSpecs(retrievalQuery(context, recentTools), {
+            alwaysInclude: DEFAULT_ADVERTISE,
+            recent: recentTools,
+            pinned: config.services.pinnedTools,
+          })
+        : registry.toolSpecs();
+
+      const reqSpan = span.child("model.call", { step: steps, advertisedTools: advertised.length });
       let response;
       try {
         response = await provider.complete(
           {
             system: context.systemPrompt(),
             messages: context.view(),
-            tools: registry.toolSpecs(),
+            tools: advertised,
             maxTokens: config.maxOutputTokens ?? 4096,
             temperature: config.temperature,
             toolChoice: { type: "auto" },
@@ -229,6 +244,8 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
 
       for (const use of toolUses) {
         steps += 1;
+        recentTools.push(use.name);
+        if (recentTools.length > 8) recentTools.shift();
         const t0 = Date.now();
 
         // Completion tool truly short-circuits: validate its input, end the run, and do NOT
@@ -340,6 +357,13 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
     gate: gateResult,
     error: lastError,
   };
+}
+
+/** The query a tool retriever ranks against: the mission, the active plan step, recent activity. */
+function retrievalQuery(context: ConversationContext, recent: string[]): string {
+  const plan = context.ledger.getPlan();
+  const active = plan.find((p) => p.status === "active") ?? plan.find((p) => p.status !== "done");
+  return [context.ledger.goal, active?.text ?? "", recent.slice(-5).join(" ")].filter(Boolean).join("\n");
 }
 
 /** Tool outputs are JSON; keep them compact but complete for the model to consume. */

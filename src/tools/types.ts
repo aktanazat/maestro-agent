@@ -36,6 +36,10 @@ export interface ToolServices {
   checkPermission?: (tool: { name: string; effect: Tool["effect"]; risk: Tool["risk"] }) => string | null | undefined;
   /** Set while the acceptance gate runs its checks, so observers can tell them from agent actions. */
   gatePhase?: boolean;
+  /** Lexical search over the full registry for `agent.find_tools` (set when tool retrieval is on). */
+  toolFinder?: (query: string, limit: number) => Array<{ name: string; description: string }>;
+  /** Tools the model pinned via agent.find_tools; the retriever keeps these advertised. */
+  pinnedTools?: Set<string>;
 }
 
 export interface ProjectIndexHandle {

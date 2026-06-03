@@ -31,6 +31,16 @@ export const ConfigSchema = z.object({
       recencyKeep: z.number().int().positive().default(8),
     })
     .default({}),
+  toolRetrieval: z
+    .object({
+      /** Advertise a retrieved subset of tools per turn instead of the whole registry. */
+      enabled: z.boolean().default(true),
+      /** Apply only when the registry has more than this many tools (small sets advertise all). */
+      minTools: z.number().int().positive().default(25),
+      topK: z.number().int().positive().default(16),
+      maxTotal: z.number().int().positive().default(24),
+    })
+    .default({}),
   rateLimits: z
     .object({
       anthropicPerSec: z.number().positive().default(4),

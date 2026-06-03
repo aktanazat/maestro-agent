@@ -17,6 +17,7 @@ import { ConfigError } from "../resilience/errors.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { makeSpawner } from "../subagent/spawn.js";
 import { ProjectIndex } from "../tools/project-index.js";
+import { ToolRetriever } from "../tools/retrieval.js";
 import { createLogger, type Logger } from "../obs/logger.js";
 import { Tracer } from "../obs/tracing.js";
 import { RateLimiterRegistry } from "../resilience/ratelimit.js";
@@ -118,6 +119,13 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
   // invalidates the single cache, so reads always see fresh state.
   const projectIndex = new ProjectIndex(workspace);
   const checkPermission = permissionPolicy(opts.config.permissionMode);
+
+  // Tool retrieval (top-level only): advertise a relevant subset per turn rather than all 60
+  // schemas. Subagents get small scoped registries, so they advertise everything.
+  const tr = opts.config.toolRetrieval;
+  const retriever = tr.enabled && registry.size() > tr.minTools ? new ToolRetriever(registry) : undefined;
+  const pinnedTools = new Set<string>();
+
   const services: ToolServices = {
     spawnSubagent: makeSpawner({ provider, registry, workspace, logger, tracer, rateLimiter, projectIndex, checkPermission }),
     rateLimiter,
@@ -126,6 +134,8 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     onToolResult: opts.onToolResult,
     projectIndex,
     checkPermission,
+    toolFinder: retriever ? (q, l) => retriever.find(q, l) : undefined,
+    pinnedTools,
   };
 
   const budgets: Budgets = {
@@ -150,6 +160,7 @@ export async function runTask(opts: TaskOptions): Promise<TaskResult> {
     gate: opts.gate === null ? undefined : (opts.gate ?? sweAcceptanceGate),
     missionLog,
     startStep: checkpoint?.step,
+    toolRetriever: retriever,
     onStep: opts.onStep,
   });
 

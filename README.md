@@ -17,7 +17,7 @@ toolset, isolated subagents, durable working memory, and production guardrails.
 ```
 maestro run "the test suite is failing; find the root cause, fix it, and commit" --repo ./some-project
 maestro eval            # deterministic eval suite (no API key needed)
-maestro tools           # list the 60-tool registry
+maestro tools           # list the 61-tool registry
 ```
 
 ## Why it's shaped this way
@@ -27,7 +27,8 @@ else is structure that keeps a long autonomous run correct.
 
 | Concern | Where | What it does |
 | --- | --- | --- |
-| **Tool registry** | `src/tools/registry.ts` | 60 tools across 8 namespaces are self-describing `Tool<I,O>` values in a `Map`. Anthropic JSON schemas are generated from zod. Dispatch is one validated code path, so there is no `switch (toolName)` to grow. |
+| **Tool registry** | `src/tools/registry.ts` | 61 tools across 8 namespaces are self-describing `Tool<I,O>` values in a `Map`. Anthropic JSON schemas are generated from zod. Dispatch is one validated code path, so there is no `switch (toolName)` to grow. |
+| **Tool retrieval** | `src/tools/retrieval.ts` | At 61 tools, advertising every schema each call is costly and hits provider token limits. A lexical BM25 selector advertises a relevant subset per turn (control plane + coding essentials + top-ranked + recently-used), cutting schema tokens ~47%; `agent.find_tools` surfaces the long tail. Grounded in RAG-MCP / ToolLLM (see `docs/research/`). |
 | **Subagent orchestration** | `src/subagent/spawn.ts` | `agent.spawn` runs the same loop with an isolated context, a registry subset scoped to the granted tools, its own budget and trace span, and a schema-validated return. The parent sees only that return, never the child's transcript. |
 | **Long-horizon execution** | `src/agent/ledger.ts`, `src/agent/context.ts` | A durable plan ledger holds the plan, established facts, and file digests. It is re-rendered into the system prompt on every call, so it outlives the compaction that summarizes stale tool output away. Plan coherence lives in code, not in a prompt instruction. |
 | **Acceptance gate** | `src/agent/gate.ts` | Completion is a fact the runtime checks, not a claim the model makes. Before a run finishes, the loop runs the checks itself (tests pass, build passes, the tree is committed, the plan is closed) and refuses "done" until green, feeding failures back. |
@@ -47,9 +48,9 @@ type, not a convention. The tool scores source files against the parsed failures
 ranked candidates for the editor to target. The eval verifies the actual data flowed through,
 not just the call order.
 
-## Namespaces (60 tools)
+## Namespaces (61 tools)
 
-`fs.*` (14), `git.*` (15), `code.*` (9), `shell.*` (6), `plan.*` (5), `agent.*` (2),
+`fs.*` (14), `git.*` (15), `code.*` (9), `shell.*` (6), `plan.*` (5), `agent.*` (3),
 `github.*` (7), `web.*` (2). Run `maestro tools` for the full annotated list.
 
 ## Architecture at a glance

@@ -58,4 +58,21 @@ const listTools = defineTool({
   },
 });
 
-export const agentTools: Tool[] = [spawn, listTools];
+const findTools = defineTool({
+  name: "agent.find_tools",
+  description:
+    "Search the full tool registry by capability and surface matching tools that may not be currently advertised. Use this when you need a tool you don't see in the list (e.g. 'open a pull request', 'fetch a URL'). Returns matches and keeps them available for the rest of the run.",
+  input: z.object({ query: z.string().min(2).describe("What you need to do, e.g. 'create a github issue'."), limit: z.number().int().positive().max(15).default(8) }),
+  output: z.object({ tools: z.array(z.object({ name: z.string(), description: z.string() })) }),
+  effect: "read",
+  handler: async (input, ctx) => {
+    const finder = ctx.services.toolFinder;
+    if (!finder) return { tools: [] };
+    const tools = finder(input.query, input.limit);
+    for (const t of tools) ctx.services.pinnedTools?.add(t.name);
+    return { tools };
+  },
+});
+
+export const agentTools: Tool[] = [spawn, listTools, findTools];
+

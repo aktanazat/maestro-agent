@@ -28,12 +28,16 @@ Each of the five required properties does real work:
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.
 
-Two capabilities sit on top of the five required properties because they are what a crash-resumable
+Three capabilities sit on top of the five required properties because they are what a robust
 agent runtime actually needs. An **acceptance gate** (`src/agent/gate.ts`) makes completion a fact
 the runtime checks (tests pass, build passes, tree committed, plan closed), not a claim the model
 makes; a red gate is fed back and the run continues. A **durable mission log**
 (`src/agent/mission-log.ts`) checkpoints the ledger and message window every step, so `maestro
-resume <id>` rebuilds a killed run in a fresh process and finishes it.
+resume <id>` rebuilds a killed run in a fresh process and finishes it. **Tool retrieval**
+(`src/tools/retrieval.ts`) advertises a relevant subset of the 61 tools each turn (lexical BM25 over
+tool metadata) instead of all schemas, cutting schema tokens ~47%; it is grounded in a deep-research
++ Codex review of the agent literature (`docs/research/`), which both ranked it the first thing to
+build.
 
 The eval harness materializes a fixture repo with seeded bugs into a temporary git repo, runs
 the agent, then runs the fixture's own suite to confirm the bugs are fixed. That is a
