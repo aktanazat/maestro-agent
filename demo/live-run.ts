@@ -22,7 +22,7 @@ if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
   process.exit(2);
 }
 
-const provider = new OpenAICompatibleProvider({ logger: createLogger({ level: "warn" }), ratePerSec: 0.5, burst: 1, maxRetries: 16 });
+const provider = new OpenAICompatibleProvider({ logger: createLogger({ level: "silent" }), ratePerSec: Number(process.env.RATE ?? 1), burst: 1, maxRetries: 20 });
 // A focused toolset keeps each request small enough for a free-tier token-per-minute window. The
 // model still selects autonomously; the full 60-tool registry runs unchanged on a paid endpoint.
 // Simple-input tools only: a free-tier model + strict argument validation can't reliably echo a
@@ -50,13 +50,14 @@ const result = await runTask({
   config: loadConfig({ provider: "mock" }), // config only; provider injected below
   provider,
   registry,
-  logger: createLogger({ level: "warn" }),
+  logger: createLogger({ level: "silent" }),
   budgets: { maxSteps: 45, maxTokens: 600_000, maxWallClockMs: 10 * 60_000 },
   onToolResult: (e) => {
     if (e.gate) {
       out(`     ${e.ok ? C.green + "✓" : C.red + "✗"}${C.reset} ${C.dim}gate: ${e.name}${C.reset}`);
       return;
     }
+    if (e.name === "plan.update" || e.name === "plan.status") return; // churn — keep it out of the view
     const arg = briefArg(e.name, e.input, e.output);
     out(`  ${e.ok ? C.cyan + "→" : C.red + "→"}${C.reset} ${C.bold}${e.name}${C.reset}${arg ? "  " + C.dim + arg + C.reset : ""}`);
   },

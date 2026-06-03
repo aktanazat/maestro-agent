@@ -5,13 +5,26 @@ the failing tests pass" or "add feature X", and it plans, edits, runs the tests,
 until the goal is verifiably met. The model decides what to do. The runtime gives it a coherent
 toolset, isolated subagents, durable working memory, and production guardrails.
 
+### A real model actually solving it
+
+![Gemini fixing a real bug](demo/live-solve.gif)
+
+> Not the mock — a **live model** (Gemini 2.5 Flash, through the provider-agnostic adapter) driving
+> every decision: it plans, runs the tests, reads the source, diagnoses that `add` subtracts instead
+> of adds, patches it, re-runs to green, and commits. 19 tool calls, no human in the loop,
+> acceptance-gate verified. The clip is replayed from the run's own mission log
+> (`demo/live-solve/mission.jsonl`) — the events are exactly what the model did. Reproduce with a
+> free Gemini or Groq key: `OPENAI_API_KEY=… MAESTRO_OPENAI_BASE_URL=… npx tsx demo/live-run.ts`.
+
+### The full machinery (deterministic, CI-verified)
+
 ![maestro fixing a repo](demo/agent-demo.gif)
 
-> Watch the agent autonomously fix a failing repo: it plans 13 steps, runs the tests, composes
-> `run_tests` into `localize_failure`, delegates an audit to an isolated subagent, survives a
-> context compaction mid-run, patches both bugs, re-verifies green, and commits. 27 tool calls,
-> plan coherent throughout. Deterministic and reproducible: [`demo/agent-run.ts`](demo/agent-run.ts)
-> drives the real agent via the mock provider (no API key). There's also a
+> The same agent on a harder repo, driven by the mock provider so CI can run it with no API key: it
+> plans 13 steps, runs the tests, composes `run_tests` into `localize_failure`, delegates an audit to
+> an isolated subagent, survives a context compaction mid-run, patches both bugs, re-verifies green,
+> and commits. 27 tool calls, plan coherent throughout
+> ([`demo/agent-run.ts`](demo/agent-run.ts)). There's also a
 > [code tour](demo/maestro-demo.gif) of the registry, subagent, and compaction internals.
 
 ```

@@ -48,12 +48,12 @@ harness shows the runtime invariants generalize rather than fit one happy path.
 
 ## What I cut
 
-- **Full live end-to-end run.** The live Anthropic path is wired and verified at the protocol
-  level (it exposed and I fixed two real bugs: dotted tool names and OpenAPI-form schemas that the
-  API rejects). I drove it with a Claude Code OAuth token; the request shape is now accepted (the
-  failures moved from 400 to 429). A complete autonomous run was blocked by the subscription's
-  burst rate limit, which a pay-per-token key removes. I did not build a multi-repo benchmark or
-  statistical scoring across many tasks.
+- **Live model, at scale.** A real model DOES drive it end to end: Gemini 2.5 Flash (free tier,
+  via the OpenAI-compatible adapter) autonomously planned, diagnosed, fixed a seeded bug, drove the
+  suite to green, and committed (`demo/live-solve/`, replayed in `demo/live-solve.gif`). Hardening the
+  Anthropic path also surfaced and fixed two real wire bugs the mock can't catch (dotted tool names,
+  OpenAPI-form schemas). What I did NOT do: a sustained multi-bug live run (free-tier rate limits) or
+  a multi-repo benchmark with statistical scoring.
 - **Automatic crash recovery.** Resume exists and is proven (`maestro resume`, plus a resume eval),
   but it is operator-initiated. There is no supervisor that detects a stuck run and restarts it from
   the last checkpoint. That is the next step.
