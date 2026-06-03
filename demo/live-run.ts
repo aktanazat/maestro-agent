@@ -11,6 +11,7 @@ import { runTask } from "../src/agent/runner.js";
 import { loadConfig } from "../src/config.js";
 import { createLogger } from "../src/obs/logger.js";
 import { OpenAICompatibleProvider } from "../src/llm/openai.js";
+import { buildRegistry } from "../src/tools/index.js";
 import { runCommand } from "../src/util/exec.js";
 
 const C = { reset: "\x1b[0m", dim: "\x1b[2m", bold: "\x1b[1m", cyan: "\x1b[36m", green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m", mag: "\x1b[35m", gray: "\x1b[90m" };
@@ -21,7 +22,18 @@ if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
   process.exit(2);
 }
 
-const provider = new OpenAICompatibleProvider({ logger: createLogger({ level: "warn" }), ratePerSec: 1, burst: 2 });
+const provider = new OpenAICompatibleProvider({ logger: createLogger({ level: "warn" }), ratePerSec: 0.5, burst: 1, maxRetries: 16 });
+// A focused toolset keeps each request small enough for a free-tier token-per-minute window. The
+// model still selects autonomously; the full 60-tool registry runs unchanged on a paid endpoint.
+// Simple-input tools only: a free-tier model + strict argument validation can't reliably echo a
+// big nested object (e.g. localize_failure's full TestRunResult), so the live run uses tools the
+// model can call cleanly. The full registry and the composition chain run on a capable model.
+const registry = buildRegistry().subset([
+  "fs.read", "fs.write", "fs.edit", "fs.list", "fs.glob", "fs.read_many",
+  "code.grep", "code.outline",
+  "shell.run_tests", "git.status", "git.diff", "git.add", "git.commit_all",
+  "plan.set", "plan.update", "plan.note_fact", "plan.status",
+]);
 const ws = await materialize("buggy-stats");
 const goal = "the test suite is failing. find the root cause, fix the source so every test passes, and commit.";
 
@@ -36,6 +48,7 @@ const result = await runTask({
   workspace: ws,
   config: loadConfig({ provider: "mock" }), // config only; provider injected below
   provider,
+  registry,
   logger: createLogger({ level: "warn" }),
   budgets: { maxSteps: 45, maxTokens: 600_000, maxWallClockMs: 10 * 60_000 },
   onToolResult: (e) => {
@@ -57,6 +70,7 @@ out();
 out(`  ${verify.exitCode === 0 ? C.green + "✓ the live model fixed the bug; suite is green" : C.red + "✗ suite still red"}${C.reset}`);
 out(`  ${C.dim}status=${result.status} · ${result.toolCalls.length} tool calls · ${result.compactions} compactions · ${Math.round((Date.now() - t0) / 1000)}s · mission ${result.missionId}${C.reset}`);
 out(`  ${C.dim}workspace: ${ws}${C.reset}`);
+if (result.error) out(`  ${C.red}error: ${result.error.code} ${result.error.message.slice(0, 160)}${C.reset}`);
 process.exit(verify.exitCode === 0 ? 0 : 1);
 
 function briefArg(name: string, input: unknown, output: unknown): string {

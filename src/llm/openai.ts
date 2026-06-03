@@ -143,7 +143,17 @@ function mapFinish(reason: string | undefined): StopReason {
 
 async function httpError(res: Response): Promise<Error> {
   const body = await res.text().catch(() => "");
-  if (res.status === 429) return new RateLimitError(new URL(res.url).hostname);
+  if (res.status === 429) {
+    // Honor the provider's retry-after (Groq free tier returns the exact wait, in seconds), so
+    // backoff waits out the per-minute token window instead of giving up early.
+    const ra = res.headers.get("retry-after");
+    const retryAfterMs = ra ? Math.ceil(parseFloat(ra) * 1000) : undefined;
+    return new RateLimitError(new URL(res.url).hostname, Number.isFinite(retryAfterMs) ? retryAfterMs : undefined);
+  }
   if (res.status === 529 || res.status >= 500) return new ModelOverloadedError(`HTTP ${res.status}: ${body.slice(0, 200)}`);
-  return new ModelError(`HTTP ${res.status}: ${body.slice(0, 300)}`, { retryable: false, context: { status: res.status } });
+  // Strict tool-calling endpoints (Groq) return 400 when the model's own tool-call generation is
+  // malformed ("Failed to call a function" / "did not match schema"). With temperature this is
+  // transient — a re-roll usually produces valid args — so treat it as retryable.
+  const transientGen = res.status === 400 && /failed to call a function|did not match schema|failed_generation/i.test(body);
+  return new ModelError(`HTTP ${res.status}: ${body.slice(0, 300)}`, { retryable: transientGen, context: { status: res.status } });
 }
