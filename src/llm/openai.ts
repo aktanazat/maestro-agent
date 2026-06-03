@@ -1,5 +1,4 @@
-import { estimateTokensFromText, type CompleteOptions, type ModelMessage, type ModelProvider, type ModelRequest, type ModelResponse, type StopReason, type TextBlock, type ToolUseBlock } from "./provider.js";
-import { toApiName, fromApiName } from "./anthropic.js";
+import { estimateTokensFromText, toApiName, fromApiName, type CompleteOptions, type ModelMessage, type ModelProvider, type ModelRequest, type ModelResponse, type StopReason, type TextBlock, type ToolUseBlock } from "./provider.js";
 import { withRetry, withTimeout } from "../resilience/retry.js";
 import { RateLimiter } from "../resilience/ratelimit.js";
 import { ModelError, ModelOverloadedError, RateLimitError } from "../resilience/errors.js";
@@ -18,10 +17,10 @@ export interface OpenAICompatibleOptions {
 
 /**
  * A provider for any OpenAI-compatible chat-completions API (Groq, OpenRouter, OpenAI, etc.).
- * It exists to prove maestro is model-agnostic: the loop, registry, gate, and mission log are
- * unchanged — only this adapter differs from the Anthropic one. It maps maestro's content-block
- * messages to the OpenAI tool-calling shape and back, reusing the same dot-free tool-name encoding
- * (`.`→`__`) the Anthropic provider needs, since OpenAI function names also forbid dots.
+ * The loop, registry, gate, and mission log are unchanged — only this adapter differs from the
+ * Anthropic one. It maps maestro's content-block messages to the OpenAI tool-calling shape and
+ * back, reusing the shared dot-free tool-name encoding (`.`→`__`), since OpenAI function names
+ * also forbid dots.
  */
 export class OpenAICompatibleProvider implements ModelProvider {
   readonly name: string;
@@ -84,11 +83,11 @@ interface ChatCompletion {
   usage?: { prompt_tokens: number; completion_tokens: number };
 }
 
-function mapToolChoice(choice: ModelRequest["toolChoice"]): string {
+function mapToolChoice(choice: ModelRequest["toolChoice"]): string | Record<string, unknown> {
   if (!choice || choice.type === "auto") return "auto";
   if (choice.type === "any") return "required";
   if (choice.type === "none") return "none";
-  return "auto"; // single-tool forcing is provider-specific; auto is a safe fallback
+  return { type: "function", function: { name: toApiName(choice.name) } };
 }
 
 function mapMessagesOut(system: string, messages: ModelMessage[]): Array<Record<string, unknown>> {

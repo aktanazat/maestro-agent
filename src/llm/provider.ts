@@ -73,6 +73,14 @@ export interface ModelProvider {
   estimateTokens(text: string): number;
 }
 
+/**
+ * Tool names must be dot-free on the wire: both the Anthropic and OpenAI tool APIs require
+ * `^[a-zA-Z0-9_-]+$`. The registry keeps dotted `<namespace>.<verb>` names, so providers encode
+ * the dot when advertising tools and decode it on the model's tool calls.
+ */
+export const toApiName = (n: string): string => n.replace(".", "__");
+export const fromApiName = (n: string): string => n.replace("__", ".");
+
 /** Rough token estimate (~4 chars/token). Good enough for budget thresholds. */
 export function estimateTokensFromText(text: string): number {
   return Math.ceil(text.length / 4);

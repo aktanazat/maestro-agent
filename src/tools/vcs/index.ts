@@ -2,17 +2,16 @@ import { z } from "zod";
 import { defineTool } from "../types.js";
 import type { Tool, ToolContext } from "../types.js";
 import { runCommand } from "../../util/exec.js";
+import type { RunResult } from "../../util/exec.js";
 import { DiffResultSchema } from "../schemas.js";
 import { ToolExecutionError } from "../../resilience/errors.js";
+import { assertCliOk } from "../cli.js";
 
 async function git(ctx: ToolContext, args: string[], timeoutMs = 30_000) {
-  const res = await runCommand("git", args, { cwd: ctx.workspace, timeoutMs, signal: ctx.signal });
-  return res;
+  return runCommand("git", args, { cwd: ctx.workspace, timeoutMs, signal: ctx.signal });
 }
 
-function ensureOk(res: { exitCode: number; stderr: string; command: string }) {
-  if (res.exitCode !== 0) throw new ToolExecutionError("git", `${res.command} exited ${res.exitCode}: ${res.stderr.trim().slice(0, 400)}`);
-}
+const ensureOk = (res: RunResult) => assertCliOk("git", res);
 
 const status = defineTool({
   name: "git.status",

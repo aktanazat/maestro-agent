@@ -32,7 +32,7 @@ Type "clear"
 Enter
 
 # ---- 1. The registry ----
-Type "# the registry: 60 tools, 8 namespaces. the model selects. one dispatch path."
+Type "# the registry: 61 tools, 8 namespaces. the model selects. one dispatch path."
 Enter
 Sleep 400ms
 Type "node dist/index.js tools | sed -n '1,14p'"
@@ -82,7 +82,7 @@ Type "clear"
 Enter
 
 # ---- 6. CODE: one dispatch path ----
-Type "# no switch over 60 tools: validate, permission-gate, dispatch, validate"
+Type "# no switch over 61 tools: validate, permission-gate, dispatch, validate"
 Enter
 Sleep 400ms
 Type "bat --color=always --style=numbers --line-range=137:172 src/tools/registry.ts"

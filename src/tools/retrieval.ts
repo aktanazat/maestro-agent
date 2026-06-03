@@ -1,12 +1,10 @@
 import type { ToolRegistry, ToolSpec } from "./registry.js";
 
 /**
- * Retrieval-gating over the registry. Instead of advertising all 60 tool schemas on every model
- * call (costly, and it hits real token limits on smaller providers), this selects a relevant
- * subset per turn — the technique RAG-MCP / ToolLLM / Gorilla describe, which reports large
- * prompt-token cuts and better selection accuracy. ToolRet shows off-the-shelf EMBEDDING retrievers
- * are weak for tools, so this starts with lexical BM25 over each tool's name, namespace,
- * description, input field names, and effect — no embedding dependency, deterministic, fast.
+ * Retrieval-gating over the registry. Advertising all 60 tool schemas every model call is costly
+ * and hits token limits on smaller providers, so this selects a relevant subset per turn. Scoring
+ * is lexical BM25 over each tool's name, namespace, description, input field names, and effect — no
+ * embedding dependency, deterministic, fast.
  *
  * The model is never trapped: a control set (`plan.*`, `agent.*`) is always visible, recently-used
  * and explicitly-pinned tools stay visible, and `agent.find_tools` lets the model pull in anything

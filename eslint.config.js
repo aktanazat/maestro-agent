@@ -6,7 +6,7 @@ export default [
     ignores: ["dist/**", "node_modules/**", "fixtures/**", "coverage/**"],
   },
   {
-    files: ["src/**/*.ts", "tests/**/*.ts"],
+    files: ["src/**/*.ts", "tests/**/*.ts", "demo/**/*.ts"],
     languageOptions: {
       parser: tsparser,
       parserOptions: { ecmaVersion: 2022, sourceType: "module" },

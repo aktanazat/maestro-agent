@@ -2,27 +2,17 @@ import { z } from "zod";
 import { defineTool } from "../types.js";
 import type { Tool, ToolContext } from "../types.js";
 import { runCommand } from "../../util/exec.js";
-import { ToolExecutionError } from "../../resilience/errors.js";
+import { assertCliOk, cliJson } from "../cli.js";
 
 /**
- * GitHub tools shell out to the `gh` CLI. Every call here is an EXTERNAL network call, so it
- * goes through the run's rate limiter (resource "github") before executing — this is the
- * concrete attachment point the brief asks for: rate limiting on external calls, enforced in
- * the tool layer, not hand-waved.
+ * GitHub tools shell out to the `gh` CLI. Every call here is an external network call, so it
+ * goes through the run's rate limiter (resource "github") before executing — rate limiting on
+ * external calls is enforced here in the tool layer.
  */
 async function gh(ctx: ToolContext, args: string[], opts: { json?: boolean } = {}) {
   await ctx.services.rateLimiter?.("github").acquire();
   const res = await runCommand("gh", args, { cwd: ctx.workspace, signal: ctx.signal, timeoutMs: 60_000 });
-  if (res.exitCode === 127) throw new ToolExecutionError("github", "gh CLI not installed");
-  if (res.exitCode !== 0) throw new ToolExecutionError("github", `gh ${args[0]} failed: ${res.stderr.slice(0, 300)}`);
-  if (opts.json) {
-    try {
-      return JSON.parse(res.stdout);
-    } catch {
-      throw new ToolExecutionError("github", "gh returned non-JSON output");
-    }
-  }
-  return res.stdout;
+  return opts.json ? cliJson("github", res) : assertCliOk("github", res).stdout;
 }
 
 const repoView = defineTool({

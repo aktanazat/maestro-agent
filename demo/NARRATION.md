@@ -11,8 +11,9 @@ short, the narration is the spine. Read at a natural pace and it runs about 3.5 
 **[open]**
 This is maestro, an autonomous software-engineering agent I built from scratch. I'm going to
 give it a repository where the tests are failing, and a one-line goal, and just watch it work.
-Nothing here is scripted output — this is the real agent loop, the real tool registry, the real
-subagent, driven step by step.
+The loop, the tool registry, the subagent, the compaction — all real, running step by step. This
+clip is driven by a deterministic provider so it replays identically; the live-model proof (Gemini
+2.5 Flash solving a real bug) is the GIF at the top of the README.
 
 **[the plan appears]**
 First thing it does is decompose the goal into a thirteen-step plan. That plan isn't decoration.
@@ -38,8 +39,8 @@ It doesn't lose its place.
 
 **[the fix and close]**
 Then it patches both bugs, re-runs the suite to *verify* green rather than assume it, and commits.
-Twenty-seven tool calls, one subagent, one compaction, plan coherent the whole way. And under it:
-sixty tools, retries with backoff, rate limits, typed errors, fifty-one tests.
+One subagent, one compaction, plan coherent the whole way. And under it: sixty-plus tools, retries
+with backoff, rate limits, typed errors, a full passing test suite.
 
 ## Act 2 — how it's built  ·  over `maestro-demo.mp4`
 

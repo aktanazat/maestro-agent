@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { estimateTokensFromText } from "./provider.js";
+import { estimateTokensFromText, toApiName, fromApiName } from "./provider.js";
 import type {
   CompleteOptions,
   ModelMessage,
@@ -33,12 +33,6 @@ const DEFAULT_MODEL = "claude-sonnet-4-6";
 // beta header and the system prompt must begin with this identity line, or the API rejects it.
 const OAUTH_BETA = "oauth-2025-04-20";
 const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
-
-// The Anthropic API restricts tool names to ^[a-zA-Z0-9_-]+$ — no dots. maestro names tools
-// `<namespace>.<verb>` for a coherent registry, so we encode the dot on the wire and decode it
-// back on the model's tool_use blocks. The registry only ever sees the dotted names.
-export const toApiName = (n: string): string => n.replace(".", "__");
-export const fromApiName = (n: string): string => n.replace("__", ".");
 
 /**
  * Real provider. Wraps the Anthropic Messages API and is the place where all the

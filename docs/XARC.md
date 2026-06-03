@@ -45,17 +45,16 @@ the problem pushes everyone toward them:
 
 ## What is honestly smaller / unfinished
 
-- **No completed live-model run.** The Anthropic path is wired and verified to the point the API
-  accepts the request (I drove it with a Claude Code OAuth token and fixed two real wire-format
-  bugs the mock never caught: dotted tool names, draft-2020-12 schemas. The actual API responses
-  are in `docs/reviews/live-integration-evidence.md`, a 400→400→429 progression). A full autonomous
-  run was blocked by the subscription's burst rate limit; a pay-per-token key removes it
-  (`npm run eval -- --real`). So the deterministic eval proves runtime **invariants** (gate, resume,
-  compaction, composition), and the evidence proves the **live wire**; the one thing not captured is
-  a full autonomous run on the real model. I did not oversell that.
-- **One domain, scripted solver.** The eval drives the real loop/registry/subagent/gate/mission-log
-  through a deterministic mock provider. That is strong proof of the machinery, weak proof of model
-  autonomy. A held-out, multi-domain, real-model benchmark is the next thing I would build.
+- **One live-model run, not a benchmark.** A full autonomous solve is captured on a real model —
+  Gemini 2.5 Flash through the OpenAI-compatible adapter fixed a failing test end to end, and the
+  recorded mission log is in `demo/live-solve/mission.jsonl` (the `demo/live-solve.gif` replays it).
+  Wiring the live path surfaced two real bugs the mock never caught: dotted tool names and
+  draft-2020-12 schemas. So the deterministic eval proves runtime **invariants** (gate, resume,
+  compaction, composition) and the live run proves the loop drives a real model — but it is a single
+  solve, not a held-out, multi-domain benchmark. That benchmark is the next thing I would build.
+- **One domain, scripted eval solver.** The eval drives the real loop/registry/subagent/gate/
+  mission-log through a deterministic mock provider. That is strong proof of the machinery, weak
+  proof of model autonomy — which the live run above is meant to complement, not replace.
 - **No Manager/Worker, no crash-recovery supervisor** that restarts a stuck worker. Resume is
   manual (`maestro resume`), not automatic.
 

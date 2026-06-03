@@ -8,9 +8,8 @@ import { asMaestroError } from "../resilience/errors.js";
  * allowed to complete, the gate RUNS the checks itself — tests pass, build passes, the working
  * tree is committed, the plan is closed — and any failure is fed back so the agent keeps working.
  *
- * This is the discipline that separates an agent that *claims* it finished from one that *proved*
- * it: the loop will not accept completion until the gate is green (or the gate-retry budget is
- * spent). Checks are real tool calls through the same registry the agent uses.
+ * The loop will not accept completion until the gate is green (or the gate-retry budget is spent).
+ * Checks are real tool calls through the same registry the agent uses.
  */
 export interface GateCheck {
   name: string;

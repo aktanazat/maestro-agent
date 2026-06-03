@@ -71,7 +71,7 @@ not just the call order.
 ```
 CLI (commander) -> runTask (composition root)
                      |- AnthropicProvider | MockProvider     (src/llm)
-                     |- ToolRegistry  (60 tools, 8 namespaces)
+                     |- ToolRegistry  (61 tools, 8 namespaces)
                      |- ConversationContext + Ledger          (context mgmt + durable memory)
                      |- RateLimiterRegistry / retry / errors   (resilience)
                      |- Tracer + pino logger                   (observability)

@@ -4,6 +4,7 @@ import { defineTool } from "../types.js";
 import type { Tool, ToolContext } from "../types.js";
 import { runCommand } from "../../util/exec.js";
 import { resolveInside } from "../../util/paths.js";
+import { ToolDeniedError } from "../../resilience/errors.js";
 import { TestRunResultSchema, type TestFailure } from "../schemas.js";
 
 /** Block obviously destructive/unscoped commands even though argv form already prevents shell injection. */
@@ -17,8 +18,8 @@ async function detectRunner(ctx: ToolContext): Promise<{ runner: string; file: s
       dependencies?: Record<string, string>;
     };
     const deps = { ...pkg.devDependencies, ...pkg.dependencies };
-    if (deps?.vitest) return { runner: "vitest", file: "npx", args: ["--no-install", "vitest", "run", "--reporter=verbose"] };
-    if (deps?.jest) return { runner: "jest", file: "npx", args: ["--no-install", "jest", "--verbose"] };
+    if (deps.vitest) return { runner: "vitest", file: "npx", args: ["--no-install", "vitest", "run", "--reporter=verbose"] };
+    if (deps.jest) return { runner: "jest", file: "npx", args: ["--no-install", "jest", "--verbose"] };
     if (pkg.scripts?.test) return { runner: "npm-test", file: "npm", args: ["test", "--silent"] };
   } catch {
     /* fall through */
@@ -112,7 +113,7 @@ const run = defineTool({
   handler: async (input, ctx) => {
     const full = [input.command, ...input.args].join(" ");
     if (DENY.some((re) => re.test(full))) {
-      throw new (await import("../../resilience/errors.js")).ToolDeniedError("shell.run", `command matches a deny pattern: ${full}`);
+      throw new ToolDeniedError("shell.run", `command matches a deny pattern: ${full}`);
     }
     const res = await runCommand(input.command, input.args, { cwd: ctx.workspace, signal: ctx.signal, timeoutMs: input.timeoutMs });
     return { command: res.command, exitCode: res.exitCode, stdout: res.stdout, stderr: res.stderr, durationMs: res.durationMs };

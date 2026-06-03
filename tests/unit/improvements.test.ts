@@ -118,7 +118,7 @@ describe("Anthropic wire-format compatibility (regressions found by the live API
   });
 
   it("encodes dotted tool names to the API-safe pattern and round-trips back", async () => {
-    const { toApiName, fromApiName } = await import("../../src/llm/anthropic.js");
+    const { toApiName, fromApiName } = await import("../../src/llm/provider.js");
     const { buildRegistry } = await import("../../src/tools/index.js");
     const apiPattern = /^[a-zA-Z0-9_-]{1,128}$/;
     for (const name of buildRegistry().names()) {
