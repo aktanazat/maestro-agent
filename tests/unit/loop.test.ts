@@ -107,6 +107,32 @@ describe("agent loop", () => {
     expect(provider.calls.length).toBe(3);
   });
 
+  it("persists a durable Reflexion lesson in the ledger when the acceptance gate fails", async () => {
+    const registry = new ToolRegistry().register(ping("ok"));
+    const provider = new MockProvider(() => say("I'm done.")); // never calls a tool
+    const { ledger, context } = harness(provider);
+    const failingGate = async () => ({
+      passed: false,
+      checks: [{ name: "tests_pass", ok: false, required: true, detail: "2 failing" }],
+      feedback: "fix the failing tests before finishing",
+    });
+    const result = await runAgent({
+      provider,
+      registry,
+      context,
+      budgets: { maxSteps: 20, maxTokens: 1_000_000 },
+      services: { ledger },
+      workspace: "/tmp",
+      logger: silentLogger(),
+      tracer: noopTracer(),
+      gate: failingGate,
+    });
+    expect(result.status).toBe("max_steps"); // gate never went green
+    expect(result.gate?.passed).toBe(false);
+    const lesson = ledger.getFacts().find((f) => f.key === "acceptance-gate");
+    expect(lesson?.value).toContain("tests_pass");
+  });
+
   it("feeds a failed tool back as an error result instead of crashing the run", async () => {
     const registry = new ToolRegistry().register(ping("throw"));
     // First turn calls the throwing tool; second turn ends the run.

@@ -203,8 +203,16 @@ export async function runAgent(config: RunAgentConfig): Promise<AgentRunResult> 
             }
             if (gateAttempts < MAX_GATE_ATTEMPTS) {
               gateAttempts += 1;
-              logger.warn({ gateAttempts, failed: gateResult.checks.filter((c) => !c.ok).map((c) => c.name) }, "acceptance gate not green; continuing");
+              const failed = gateResult.checks.filter((c) => !c.ok);
+              logger.warn({ gateAttempts, failed: failed.map((c) => c.name) }, "acceptance gate not green; continuing");
               span.addEvent("gate_failed", { attempt: gateAttempts });
+              // Reflexion: store the failure as a DURABLE lesson in the ledger (not just a transient
+              // user message), so it survives compaction and the agent stops repeating the mistake
+              // across retries. Verbal self-correction, no fine-tuning (Shinn et al., 2023).
+              context.ledger.addFact(
+                "acceptance-gate",
+                `still failing after attempt ${gateAttempts}: ${failed.map((c) => `${c.name} (${c.detail})`).join("; ")}`,
+              );
               context.pushUser([{ type: "text", text: gateResult.feedback }]);
               continue;
             }
