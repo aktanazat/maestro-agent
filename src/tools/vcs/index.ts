@@ -191,6 +191,7 @@ const commitAll = defineTool({
   input: z.object({ message: z.string().min(1) }),
   output: z.object({ hash: z.string(), filesChanged: z.number() }),
   effect: "write",
+  risk: "high", // stages every change (git add -A), so the permission policy should gate it
   handler: async (input, ctx) => {
     const st = await git(ctx, ["status", "--porcelain=v1"]);
     const filesChanged = st.stdout.split("\n").filter(Boolean).length;
@@ -254,6 +255,7 @@ const stash = defineTool({
   handler: async (input, ctx) => {
     const args = input.action === "push" ? ["stash", "push", ...(input.message ? ["-m", input.message] : [])] : ["stash", input.action];
     const res = await git(ctx, args);
+    ensureOk(res); // a `stash pop` conflict exits non-zero — surface it instead of reporting success
     return { action: input.action, output: (res.stdout || res.stderr).trim() };
   },
 });

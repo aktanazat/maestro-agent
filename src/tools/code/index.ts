@@ -212,10 +212,9 @@ const lint = defineTool({
 });
 
 /**
- * THE composability showcase. Input includes `testRun: TestRunResultSchema` — the exact
- * output schema of `shell.run_tests`. The model (or a script) runs tests, then pipes the
- * structured result straight into this tool, which scores source files by how strongly the
- * failure messages/paths point at them. Output ranks candidate files for fs.edit to target.
+ * Consumes the exact `TestRunResultSchema` that `shell.run_tests` emits and scores source files
+ * by how strongly the failure messages/paths point at them, ranking candidates for `fs.edit` to
+ * target. The shared schema is what lets one tool's typed output feed directly into the next.
  */
 const localizeFailure = defineTool({
   name: "code.localize_failure",

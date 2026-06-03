@@ -1,14 +1,13 @@
 import { ToolExecutionError } from "../resilience/errors.js";
 import type { RunResult } from "../util/exec.js";
 
-/**
- * Shared interpretation of a CLI invocation. Both the git and github tool families shell out
- * and face the same three concerns — missing binary (exit 127), non-zero exit, and parsing
- * JSON output — so they converge here instead of re-implementing the checks per tool.
- */
+/** Throw on a missing binary (exit 127) or a non-zero exit; otherwise return the result. */
 export function assertCliOk(tool: string, res: RunResult): RunResult {
   if (res.exitCode === 127) throw new ToolExecutionError(tool, `${tool} CLI not installed`);
-  if (res.exitCode !== 0) throw new ToolExecutionError(tool, `${res.command} exited ${res.exitCode}: ${res.stderr.trim().slice(0, 400)}`);
+  if (res.exitCode !== 0) {
+    const detail = (res.stderr.trim() || res.stdout.trim() || "no output").slice(0, 400);
+    throw new ToolExecutionError(tool, `${res.command} exited ${res.exitCode}: ${detail}`);
+  }
   return res;
 }
 

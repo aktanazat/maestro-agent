@@ -1,4 +1,9 @@
-import type { ToolSpec } from "../tools/registry.js";
+/** Model-facing tool spec: the JSON a provider advertises to the model. */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
 
 /**
  * Provider-agnostic message shape. Modeled on Anthropic's content-block protocol

@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import { join, relative, resolve, extname } from "node:path";
 
 /** Directories never descended into during workspace discovery. */
-export const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
+const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
 
 export interface WalkOptions {
   /** Stop after this many files. */

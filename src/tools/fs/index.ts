@@ -203,9 +203,11 @@ const glob = defineTool({
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
     const matcher = globToRegExp(input.pattern);
-    const all = await walkFiles(root, { limit: input.limit + 1, match: (rel) => matcher.test(rel) });
-    const truncated = all.length > input.limit;
-    return { pattern: input.pattern, files: all.slice(0, input.limit).map((a) => relative(root, a)), truncated };
+    const idx = ctx.services.projectIndex;
+    const rels = idx
+      ? (await idx.relFiles()).filter((rel) => matcher.test(rel))
+      : (await walkFiles(root, { match: (rel) => matcher.test(rel) })).map((a) => relative(root, a));
+    return { pattern: input.pattern, files: rels.slice(0, input.limit), truncated: rels.length > input.limit };
   },
 });
 

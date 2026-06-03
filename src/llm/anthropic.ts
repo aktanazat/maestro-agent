@@ -112,7 +112,7 @@ export class AnthropicProvider implements ModelProvider {
 function mapToolChoice(choice: ModelRequest["toolChoice"]): Anthropic.MessageCreateParams["tool_choice"] {
   if (!choice || choice.type === "auto") return { type: "auto" };
   if (choice.type === "any") return { type: "any" };
-  if (choice.type === "none") return { type: "auto" }; // SDK lacks "none"; emulate by not forcing
+  if (choice.type === "none") return { type: "none" };
   return { type: "tool", name: toApiName(choice.name) };
 }
 

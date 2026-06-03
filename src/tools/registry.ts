@@ -1,5 +1,6 @@
 import { zodToJsonSchema } from "zod-to-json-schema";
 import type { Tool, ToolContext } from "./types.js";
+import type { ToolSpec } from "../llm/provider.js";
 import {
   ToolInputError,
   ToolNotFoundError,
@@ -9,12 +10,7 @@ import {
   asMaestroError,
 } from "../resilience/errors.js";
 
-/** Model-facing tool spec: the JSON the provider advertises to the model. */
-export interface ToolSpec {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-}
+export type { ToolSpec };
 
 /**
  * The ToolRegistry is the answer to "stay coherent at 50 tools, don't collapse into 50

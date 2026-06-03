@@ -118,11 +118,13 @@ function mapResponse(cc: ChatCompletion): ModelResponse {
   const content: Array<TextBlock | ToolUseBlock> = [];
   if (choice?.message.content) content.push({ type: "text", text: choice.message.content });
   for (const tc of choice?.message.tool_calls ?? []) {
-    let input: unknown = {};
+    let input: unknown;
     try {
       input = JSON.parse(tc.function.arguments || "{}");
     } catch {
-      input = {};
+      // The model emitted invalid JSON for the call arguments. Silently coercing to {} would
+      // run the tool with empty input; re-prompting (retryable) is the recoverable path.
+      throw new ModelError(`model returned malformed tool-call arguments for ${tc.function.name}`, { retryable: true });
     }
     content.push({ type: "tool_use", id: tc.id, name: fromApiName(tc.function.name), input });
   }
