@@ -7,7 +7,7 @@ import { ConfigError } from "./resilience/errors.js";
  * modules, no untyped strings. Invalid config fails fast with a typed ConfigError.
  */
 export const ConfigSchema = z.object({
-  provider: z.enum(["anthropic", "mock"]).default("anthropic"),
+  provider: z.enum(["anthropic", "openai", "mock"]).default("anthropic"),
   model: z.string().default("claude-sonnet-4-6"),
   anthropicApiKey: z.string().optional(),
   /** OAuth bearer token (Claude Code subscription). Used when no API key is set. */

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Config } from "../config.js";
 import type { ModelProvider } from "../llm/provider.js";
 import { AnthropicProvider } from "../llm/anthropic.js";
+import { OpenAICompatibleProvider } from "../llm/openai.js";
 import { buildRegistry } from "../tools/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolServices } from "../tools/types.js";
@@ -178,6 +179,11 @@ export function permissionPolicy(mode: Config["permissionMode"]): ToolServices["
 export function makeProvider(config: Config, logger: Logger): ModelProvider {
   if (config.provider === "mock") {
     throw new Error("mock provider must be supplied explicitly via TaskOptions.provider");
+  }
+  // Provider-agnostic: an OpenAI-compatible endpoint (Groq, OpenRouter, OpenAI) works through the
+  // same ModelProvider interface as Anthropic, with no change to the loop, registry, or gate.
+  if (config.provider === "openai" || (!config.anthropicApiKey && !config.anthropicAuthToken && (process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY))) {
+    return new OpenAICompatibleProvider({ model: process.env.MAESTRO_OPENAI_MODEL, logger, ratePerSec: 1 });
   }
   return new AnthropicProvider({
     apiKey: config.anthropicApiKey,
