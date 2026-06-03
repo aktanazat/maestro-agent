@@ -19,8 +19,10 @@ npm install
 npm run typecheck && npm run lint && npm run test                # 69 tests
 npm run eval                # 5/5 deterministic eval tasks, no API key
 npm run build && node dist/index.js tools   # 61 tools
-# live run: set ANTHROPIC_API_KEY, then:
+# live run (Anthropic): set ANTHROPIC_API_KEY, then:
 node dist/index.js run "fix the failing tests and commit" --repo <path>
+# provider-agnostic path used for the headline demo (free Gemini/Groq key):
+OPENAI_API_KEY=… MAESTRO_OPENAI_BASE_URL=… npx tsx demo/live-run.ts
 ```
 
 ## Convergence with Codex
@@ -32,16 +34,18 @@ This was built in a paired loop with Codex (`gpt-5.5`, high reasoning) running a
 ## Session traces (native format)
 
 Run `scripts/export-session.sh` to copy this build's Claude Code session JSONL into
-`submission/session-trace.jsonl`, which is gitignored. Attach it to the email rather than commit the
-full trace to a public repo). The native files live at
+`submission/session-trace.jsonl`, which is gitignored. Attach it to the email rather than committing
+the full trace to a public repo. The native files live at
 `~/.claude/projects/-Users-aktanazat/<session-uuid>.jsonl`.
 
 ## Video walkthrough
 
-3-5 min: demo `maestro eval` (deterministic, shows the 20+ call session + subagent +
-compaction), then walk `src/agent/loop.ts` + `src/subagent/spawn.ts` as the most substantive
-code, and surface a divergence moment. Two strong candidates: (a) `docs/reviews/01-codex-grill-plan.txt`
-where Codex called the first plan checkbox-compliance and pushed the subagent contract + forced-
-compaction eval; (b) the live-API moment where the deterministic mock said everything passed but
-the real Anthropic endpoint rejected dotted tool names and OpenAPI-form schemas, forcing a
-provider-boundary fix (see the `fix(llm)` commit).
+See `demo/NARRATION.md` for the spoken script. The arc, in ~3-5 min:
+
+1. **Open on the live solve** (`demo/live-solve.gif`) — Gemini 2.5 Flash driving the real loop end
+   to end on a failing test. This is the headline: a real model, not the mock.
+2. **The full machinery** (`demo/agent-demo.gif`) — the harder repo under the deterministic provider
+   so it's reproducible: 20+ calls, an isolated subagent, a mid-run compaction, acceptance gate.
+3. **Walk the substance** — `src/agent/loop.ts` (the one loop) and `src/subagent/spawn.ts` (the
+   isolation boundary), then a divergence moment: the mock said everything passed, but the real
+   endpoint rejected dotted tool names and OpenAPI-form schemas, forcing a provider-boundary fix.
