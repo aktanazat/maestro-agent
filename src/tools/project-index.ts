@@ -1,7 +1,6 @@
 import { promises as fs } from "node:fs";
-import { join, relative, resolve, extname } from "node:path";
-
-const IGNORE = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
+import { relative, extname } from "node:path";
+import { walkFiles } from "../util/walk.js";
 
 /**
  * A per-run cache of the workspace. Before this, every `code.*` call re-walked the whole tree,
@@ -22,7 +21,7 @@ export class ProjectIndex {
 
   /** Absolute paths of all non-ignored files, filtered by extension if given. Cached. */
   async files(exts?: string[]): Promise<string[]> {
-    if (!this.fileList) this.fileList = await walk(this.root, this.maxFiles);
+    if (!this.fileList) this.fileList = await walkFiles(this.root, { limit: this.maxFiles });
     if (!exts) return this.fileList;
     const set = new Set(exts);
     return this.fileList.filter((f) => set.has(extname(f)));
@@ -47,26 +46,4 @@ export class ProjectIndex {
     this.fileList = undefined;
     this.contentCache.clear();
   }
-}
-
-async function walk(root: string, limit: number): Promise<string[]> {
-  const out: string[] = [];
-  async function rec(dir: string): Promise<void> {
-    if (out.length >= limit) return;
-    let dirents;
-    try {
-      dirents = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const d of dirents) {
-      if (out.length >= limit) return;
-      if (IGNORE.has(d.name)) continue;
-      const abs = join(dir, d.name);
-      if (d.isDirectory()) await rec(abs);
-      else if (d.isFile()) out.push(abs);
-    }
-  }
-  await rec(resolve(root));
-  return out;
 }

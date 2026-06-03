@@ -1,13 +1,12 @@
 import { promises as fs } from "node:fs";
-import { join, relative, resolve, extname, basename } from "node:path";
+import { relative, resolve, extname, basename } from "node:path";
 import { z } from "zod";
 import { defineTool } from "../types.js";
 import type { Tool, ToolContext } from "../types.js";
 import { resolveInside } from "../../util/paths.js";
 import { runCommand } from "../../util/exec.js";
+import { walkFiles } from "../../util/walk.js";
 import { GrepResultSchema, LocalizationSchema, TestRunResultSchema } from "../schemas.js";
-
-const IGNORE = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
 
 /**
  * Absolute file paths, served from the per-run ProjectIndex when present (one cached walk),
@@ -17,7 +16,7 @@ const IGNORE = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"])
 async function listFiles(ctx: ToolContext, exts: string[] | null, limit = 5000): Promise<string[]> {
   const idx = ctx.services.projectIndex;
   if (idx) return idx.files(exts ?? undefined);
-  return walkUncached(resolve(ctx.workspace), exts, limit);
+  return walkFiles(resolve(ctx.workspace), { exts: exts ?? undefined, limit });
 }
 
 /** Memoized file content via the index, else a direct read. */
@@ -25,28 +24,6 @@ async function readCached(ctx: ToolContext, abs: string): Promise<string> {
   const idx = ctx.services.projectIndex;
   if (idx) return idx.content(abs);
   return fs.readFile(abs, "utf8").catch(() => "");
-}
-
-async function walkUncached(root: string, exts: string[] | null, limit: number): Promise<string[]> {
-  const out: string[] = [];
-  async function walk(dir: string) {
-    if (out.length >= limit) return;
-    let dirents;
-    try {
-      dirents = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const d of dirents) {
-      if (out.length >= limit) return;
-      if (IGNORE.has(d.name)) continue;
-      const abs = join(dir, d.name);
-      if (d.isDirectory()) await walk(abs);
-      else if (d.isFile() && (!exts || exts.includes(extname(d.name)))) out.push(abs);
-    }
-  }
-  await walk(root);
-  return out;
 }
 
 const grep = defineTool({

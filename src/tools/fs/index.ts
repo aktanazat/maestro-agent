@@ -4,6 +4,7 @@ import { z } from "zod";
 import { defineTool } from "../types.js";
 import type { Tool } from "../types.js";
 import { resolveInside, relInside } from "../../util/paths.js";
+import { walkFiles } from "../../util/walk.js";
 import { ToolExecutionError } from "../../resilience/errors.js";
 
 const PathInput = z.object({ path: z.string().describe("Workspace-relative path.") });
@@ -201,9 +202,8 @@ const glob = defineTool({
   effect: "read",
   handler: async (input, ctx) => {
     const root = resolve(ctx.workspace);
-    const all: string[] = [];
     const matcher = globToRegExp(input.pattern);
-    await walk(root, root, all, input.limit + 1, matcher);
+    const all = await walkFiles(root, { limit: input.limit + 1, match: (rel) => matcher.test(rel) });
     const truncated = all.length > input.limit;
     return { pattern: input.pattern, files: all.slice(0, input.limit).map((a) => relative(root, a)), truncated };
   },
@@ -256,29 +256,6 @@ const tail = defineTool({
 });
 
 // --- glob helpers -----------------------------------------------------------
-
-const IGNORE = new Set(["node_modules", ".git", "dist", "coverage", ".maestro"]);
-
-async function walk(root: string, dir: string, out: string[], limit: number, match: RegExp): Promise<void> {
-  if (out.length >= limit) return;
-  let dirents;
-  try {
-    dirents = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const d of dirents) {
-    if (out.length >= limit) return;
-    if (IGNORE.has(d.name)) continue;
-    const abs = join(dir, d.name);
-    if (d.isDirectory()) {
-      await walk(root, abs, out, limit, match);
-    } else if (d.isFile()) {
-      const rel = relative(root, abs);
-      if (match.test(rel)) out.push(abs);
-    }
-  }
-}
 
 function globToRegExp(glob: string): RegExp {
   let re = "^";

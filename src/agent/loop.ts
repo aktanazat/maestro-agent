@@ -4,7 +4,7 @@ import type { ToolContext, ToolServices } from "../tools/types.js";
 import { ConversationContext } from "./context.js";
 import type { Logger } from "../obs/logger.js";
 import type { Tracer, Span } from "../obs/tracing.js";
-import { BudgetExceededError, MaestroError, asMaestroError } from "../resilience/errors.js";
+import { MaestroError, asMaestroError } from "../resilience/errors.js";
 import type { AcceptanceGate, GateResult } from "./gate.js";
 import { DEFAULT_ADVERTISE } from "../tools/retrieval.js";
 
@@ -382,9 +382,4 @@ function stringifyResult(out: unknown): string {
 
 function toolErrorText(err: MaestroError): string {
   return JSON.stringify({ error: err.code, message: err.message, context: err.context });
-}
-
-/** Raise if a budget is already blown — used by callers that want hard failure. */
-export function assertWithinBudget(used: number, limit: number, kind: "tokens" | "steps"): void {
-  if (used >= limit) throw new BudgetExceededError(kind, limit, used);
 }

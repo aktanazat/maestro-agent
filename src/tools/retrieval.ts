@@ -124,7 +124,7 @@ export class ToolRetriever {
 }
 
 /** The always-visible control plane: plan memory + tool discovery + delegation. */
-export const CONTROL_PLANE = [
+const CONTROL_PLANE = [
   "plan.set",
   "plan.update",
   "plan.note_fact",
@@ -141,7 +141,7 @@ export const CONTROL_PLANE = [
  * The long tail (github, web, blame, lint, stash, …) is what retrieval and `agent.find_tools`
  * surface on demand.
  */
-export const CODING_ESSENTIALS = [
+const CODING_ESSENTIALS = [
   "fs.read",
   "fs.write",
   "fs.edit",

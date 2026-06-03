@@ -10,7 +10,7 @@ import { webTools } from "./web/index.js";
 import type { Tool } from "./types.js";
 
 /** Every tool maestro ships, grouped by the module that owns its namespace. */
-export const ALL_TOOLS: Tool[] = [
+const ALL_TOOLS: Tool[] = [
   ...fsTools, // fs.*
   ...vcsTools, // git.*
   ...codeTools, // code.*

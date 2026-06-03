@@ -2,7 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { estimateTokensFromText } from "./provider.js";
 import type {
   CompleteOptions,
-  ContentBlock,
   ModelMessage,
   ModelProvider,
   ModelRequest,
@@ -178,5 +177,3 @@ function mapSdkError(err: unknown): Error {
   return new ModelError(message, { retryable: false, cause: err, context: { status } });
 }
 
-/** Treat ContentBlock list as opaque pass-through for callers that need it. */
-export type { ContentBlock };

@@ -1,8 +1,7 @@
 # Research-grounded improvements
 
 Two independent passes (a deep-research web survey and a Codex xhigh code-grounded review)
-converged on the same first build: **retrieval-gate the tool registry**. Raw outputs in
-`deep-research-raw.txt` and `codex-improvement-grill.txt`.
+converged on the same first build: **retrieval-gate the tool registry**.
 
 ## Ranked shortlist (benefit / effort, no fine-tuning)
 

@@ -16,13 +16,6 @@ export interface ToolSpec {
   input_schema: Record<string, unknown>;
 }
 
-export interface RegisteredCall {
-  tool: string;
-  ok: boolean;
-  durationMs: number;
-  error?: string;
-}
-
 /**
  * The ToolRegistry is the answer to "stay coherent at 50 tools, don't collapse into 50
  * conditional dispatches". Tools are values in a Map keyed by name. Selection is the

@@ -39,12 +39,6 @@ export const GrepResultSchema = z.object({
   matches: z.array(GrepMatchSchema),
   truncated: z.boolean(),
 });
-export type GrepResult = z.infer<typeof GrepResultSchema>;
-
-export const FileRefSchema = z.object({
-  path: z.string(),
-  reason: z.string().optional(),
-});
 
 export const LocalizationSchema = z.object({
   candidates: z
@@ -65,4 +59,3 @@ export const DiffResultSchema = z.object({
   patch: z.string(),
   empty: z.boolean(),
 });
-export type DiffResult = z.infer<typeof DiffResultSchema>;

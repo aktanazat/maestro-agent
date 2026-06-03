@@ -15,9 +15,7 @@ export type ErrorCode =
   | "MODEL_OVERLOADED"
   | "RATE_LIMITED"
   | "TIMEOUT"
-  | "BUDGET_EXCEEDED"
   | "SUBAGENT_FAILED"
-  | "CONTEXT_OVERFLOW"
   | "SANDBOX_VIOLATION"
   | "INTERNAL";
 
@@ -140,15 +138,6 @@ export class TimeoutError extends MaestroError {
     super("TIMEOUT", `${what} timed out after ${ms}ms`, {
       retryable: true,
       context: { what, ms },
-    });
-  }
-}
-
-export class BudgetExceededError extends MaestroError {
-  constructor(kind: "tokens" | "steps" | "wallclock" | "cost", limit: number, used: number) {
-    super("BUDGET_EXCEEDED", `${kind} budget exceeded (limit ${limit}, used ${used})`, {
-      retryable: false,
-      context: { kind, limit, used },
     });
   }
 }
