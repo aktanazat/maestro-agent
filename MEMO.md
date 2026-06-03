@@ -3,7 +3,7 @@
 ## What I built
 
 An autonomous software-engineering agent in TypeScript. One model-driven loop
-(`src/agent/loop.ts`) steers a registry of 60 tools across 8 namespaces (`fs`, `git`, `code`,
+(`src/agent/loop.ts`) steers a registry of 61 tools across 8 namespaces (`fs`, `git`, `code`,
 `shell`, `plan`, `agent`, `github`, `web`). Tools are self-describing `Tool<I,O>` values with a risk level. The
 model picks them through Anthropic tool use, and the registry validates and dispatches through a
 single path. There is no hand-routing and no `switch (toolName)`.
@@ -22,8 +22,8 @@ Each of the five required properties does real work:
    output into summaries. The eval proves a 20-plus call session stays coherent through forced
    compaction.
 4. **Production scaffolding.** pino logs, a JSONL span tracer, exponential backoff with jitter,
-   a token-bucket rate limiter on every external call, a typed error hierarchy, an eval harness,
-   a per-run project index that walks the tree once instead of once per `code.*` call, and 59 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
+   a token-bucket rate limiter on every external call, a typed error hierarchy, 
+   a per-run project index that walks the tree once instead of once per `code.*` call, and 68 tests. The layout targets deployment: config from zod-validated env, a Dockerfile, CI.
 5. **Composable I/O.** `shell.run_tests` and `code.localize_failure` share one `TestRunResult`
    schema, and `fs.read_many` reads the resulting paths. The chain type-checks, and the eval
    verifies the data actually flowed rather than checking call order.

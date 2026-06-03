@@ -139,7 +139,7 @@ async function main() {
   out();
   out(`  ${C.cyan}${tools} tool calls${C.reset} ${C.dim}·${C.reset} ${C.cyan}${subs} subagent${C.reset} ${C.dim}·${C.reset} ${C.cyan}${comps} compaction${C.reset} ${C.dim}· plan stayed coherent the whole way${C.reset}`);
   await sleep(700);
-  out(`  ${C.dim}under the hood: 60 tools · model-driven selection · retries + backoff · rate limits · typed errors · crash-resume · 59 tests${C.reset}`);
+  out(`  ${C.dim}under the hood: 60 tools · model-driven selection · retries + backoff · rate limits · typed errors · crash-resume · tool-retrieval · 68 tests${C.reset}`);
   out();
 }
 
