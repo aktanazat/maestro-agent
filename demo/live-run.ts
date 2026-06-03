@@ -28,13 +28,14 @@ const provider = new OpenAICompatibleProvider({ logger: createLogger({ level: "w
 // Simple-input tools only: a free-tier model + strict argument validation can't reliably echo a
 // big nested object (e.g. localize_failure's full TestRunResult), so the live run uses tools the
 // model can call cleanly. The full registry and the composition chain run on a capable model.
-const registry = buildRegistry().subset([
-  "fs.read", "fs.write", "fs.edit", "fs.list", "fs.glob", "fs.read_many",
-  "code.grep", "code.outline",
-  "shell.run_tests", "git.status", "git.diff", "git.add", "git.commit_all",
-  "plan.set", "plan.update", "plan.note_fact", "plan.status",
-]);
-const ws = await materialize("buggy-stats");
+const TOOLSETS: Record<string, string[]> = {
+  // Bare minimum keeps each request tiny so it fits a free-tier token-per-minute window.
+  min: ["plan.set", "plan.update", "fs.list", "fs.read", "fs.edit", "shell.run_tests", "git.commit_all"],
+  full: ["fs.read", "fs.write", "fs.edit", "fs.list", "fs.glob", "fs.read_many", "code.grep", "code.outline", "shell.run_tests", "git.status", "git.diff", "git.add", "git.commit_all", "plan.set", "plan.update", "plan.note_fact", "plan.status"],
+};
+const registry = buildRegistry().subset(TOOLSETS[process.env.TOOLSET ?? "full"] ?? TOOLSETS.full);
+const fixture = process.env.FIXTURE ?? "buggy-stats";
+const ws = await materialize(fixture);
 const goal = "the test suite is failing. find the root cause, fix the source so every test passes, and commit.";
 
 out();
